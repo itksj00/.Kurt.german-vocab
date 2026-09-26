@@ -1,0 +1,1 @@
+# .Kurt.german-vocab
