@@ -222,14 +222,14 @@ export default function SettingsPage() {
             onClick={handleExportCSV}
             disabled={busy === "csv"}
           >
-            {busy === "csv" ? "내보내는 중..." : "CSV로 내보내기"}
+            {busy === "csv" ? "내보내는 중..." : "CSV로 내보내기 Als CSV exportieren"}
           </button>
           <button
             className="btn ghost"
             onClick={handleExportJSON}
             disabled={busy === "json"}
           >
-            {busy === "json" ? "내보내는 중..." : "JSON으로 내보내기"}
+            {busy === "json" ? "내보내는 중..." : "JSON으로 내보내기 Als JSON exportieren"}
           </button>
         </div>
 
@@ -238,7 +238,7 @@ export default function SettingsPage() {
         </div>
         <div className="row">
           <button className="btn ghost" onClick={handleDownloadTemplate}>
-            📄 템플릿(xlsx) 다운로드
+            📄 템플릿(xlsx) 다운로드 Vorlage herunterladen
           </button>
         </div>
         <p className="muted" style={{ margin: "6px 0 10px" }}>
@@ -246,6 +246,7 @@ export default function SettingsPage() {
           (예문 칸은 비워둬도 되고, &ldquo;예문&rdquo;으로 시작하는 열은 몇 개든 추가해도
           인식됩니다.)
         </p>
+        <label style={{ marginBottom: 4 }}>엑셀 파일 선택 Excel-Datei auswählen</label>
         <input
           ref={fileInputRef}
           type="file"

@@ -1,25 +1,49 @@
 :root {
-  --bg: #fafaf9;
+  --bg: #f7f5f0;
+  --bg-accent: #efece3;
   --panel: #ffffff;
-  --line: #d8d5cf;
-  --ink: #1c1b19;
-  --sub: #6b6862;
+  --line: #ddd8cd;
+  --ink: #211f1a;
+  --sub: #75705f;
   --accent: #3a5a40;
-  --accent-bg: #eef2ec;
+  --accent-strong: #2c4630;
+  --accent-bg: #e9efe6;
   --danger: #a33c3c;
+  --shadow: 0 1px 2px rgba(30, 25, 15, 0.04), 0 6px 16px rgba(30, 25, 15, 0.05);
+  --shadow-sm: 0 1px 2px rgba(30, 25, 15, 0.06);
+  --radius: 12px;
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #17181a;
-    --panel: #202124;
-    --line: #3a3b3d;
-    --ink: #eceae6;
-    --sub: #9a9793;
+  :root:not([data-theme="light"]) {
+    --bg: #14151a;
+    --bg-accent: #1b1c22;
+    --panel: #1d1e24;
+    --line: #34353e;
+    --ink: #ece9e2;
+    --sub: #918d84;
     --accent: #7fae87;
-    --accent-bg: #26312a;
-    --danger: #d97070;
+    --accent-strong: #97c29e;
+    --accent-bg: #22301f;
+    --danger: #e2837f;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.35);
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
   }
+}
+
+:root[data-theme="dark"] {
+  --bg: #14151a;
+  --bg-accent: #1b1c22;
+  --panel: #1d1e24;
+  --line: #34353e;
+  --ink: #ece9e2;
+  --sub: #918d84;
+  --accent: #7fae87;
+  --accent-strong: #97c29e;
+  --accent-bg: #22301f;
+  --danger: #e2837f;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.35);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
 }
 
 * {
@@ -33,10 +57,11 @@ body {
 
 body {
   margin: 0;
-  background: var(--bg);
+  background: linear-gradient(180deg, var(--bg-accent), var(--bg) 220px);
   color: var(--ink);
-  font-family: Georgia, "Noto Serif KR", serif;
+  font-family: "Noto Serif KR", Georgia, serif;
   -webkit-font-smoothing: antialiased;
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 a {
@@ -46,16 +71,63 @@ a {
 .app-shell {
   max-width: 640px;
   margin: 0 auto;
-  padding: 16px 16px 48px;
+  padding: 20px 18px 56px;
   min-height: 100%;
+}
+
+.app-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+
+.brand {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.3;
+}
+
+.brand-ko {
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.brand-de {
+  font-size: 0.72rem;
+  color: var(--sub);
+  font-style: italic;
+}
+
+.theme-toggle,
+.theme-toggle-placeholder {
+  width: 34px;
+  height: 34px;
+}
+
+.theme-toggle {
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--ink);
+  border-radius: 50%;
+  font-size: 1rem;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.15s ease, border-color 0.15s ease;
+}
+
+.theme-toggle:hover {
+  transform: translateY(-1px);
+  border-color: var(--accent);
 }
 
 nav.top-nav {
   display: flex;
   gap: 6px;
   overflow-x: auto;
-  padding-bottom: 10px;
-  margin-bottom: 18px;
+  padding-bottom: 12px;
+  margin-bottom: 20px;
   border-bottom: 1px solid var(--line);
 }
 
@@ -65,11 +137,18 @@ nav.top-nav a {
   background: var(--panel);
   color: var(--sub);
   padding: 6px 12px;
-  border-radius: 7px;
+  border-radius: 8px;
   font-size: 0.82rem;
   text-decoration: none;
   text-align: center;
   line-height: 1.5;
+  box-shadow: var(--shadow-sm);
+  transition: border-color 0.15s ease, color 0.15s ease, transform 0.15s ease;
+}
+
+nav.top-nav a:hover {
+  transform: translateY(-1px);
+  color: var(--ink);
 }
 
 nav.top-nav a.active {
@@ -87,9 +166,10 @@ nav.top-nav a small {
 .card {
   background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: 10px;
-  padding: 14px;
-  margin-bottom: 12px;
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-bottom: 14px;
+  box-shadow: var(--shadow);
 }
 
 .row {
@@ -114,21 +194,30 @@ input,
 select,
 textarea {
   width: 100%;
-  padding: 8px 9px;
+  padding: 9px 10px;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: 7px;
   background: var(--bg);
   color: var(--ink);
   font-family: inherit;
   font-size: 0.85rem;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-bg);
 }
 
 .btn {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 14px;
-  border-radius: 6px;
+  padding: 9px 16px;
+  border-radius: 8px;
   border: 1px solid var(--accent);
   background: var(--accent);
   color: #fff;
@@ -136,6 +225,14 @@ textarea {
   cursor: pointer;
   font-family: inherit;
   text-decoration: none;
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.15s ease, background-color 0.15s ease;
+}
+
+.btn:hover:not(:disabled) {
+  background: var(--accent-strong);
+  border-color: var(--accent-strong);
+  transform: translateY(-1px);
 }
 
 .btn.ghost {
@@ -143,10 +240,18 @@ textarea {
   color: var(--accent);
 }
 
+.btn.ghost:hover:not(:disabled) {
+  background: var(--accent-bg);
+}
+
 .btn.danger {
   background: transparent;
   border-color: var(--danger);
   color: var(--danger);
+}
+
+.btn.danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
 }
 
 .btn.small {
@@ -157,6 +262,7 @@ textarea {
 .btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+  transform: none;
 }
 
 .az-grid {
@@ -173,12 +279,17 @@ textarea {
   justify-content: center;
   gap: 2px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 9px;
   background: var(--bg);
   color: var(--sub);
   font-family: inherit;
   font-size: 0.95rem;
   cursor: pointer;
+  transition: transform 0.15s ease, border-color 0.15s ease;
+}
+
+.az-cell:hover {
+  transform: translateY(-1px);
 }
 
 .az-cell small {
@@ -202,9 +313,14 @@ textarea {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 10px 4px;
+  padding: 11px 4px;
   border-bottom: 1px solid var(--line);
   gap: 8px;
+  transition: background-color 0.15s ease;
+}
+
+.word-row:hover {
+  background: var(--bg-accent);
 }
 
 .word-row:last-child {
@@ -233,18 +349,23 @@ textarea {
   justify-content: center;
   align-items: center;
   gap: 6px;
-  margin-top: 10px;
+  margin-top: 12px;
 }
 
 .page-controls button {
   width: 30px;
   height: 30px;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: 7px;
   background: var(--panel);
   color: var(--sub);
   cursor: pointer;
   font-family: inherit;
+  transition: transform 0.15s ease;
+}
+
+.page-controls button:hover {
+  transform: translateY(-1px);
 }
 
 .page-controls button.now {
@@ -256,7 +377,9 @@ textarea {
 .section-title {
   font-size: 0.78rem;
   color: var(--sub);
-  margin: 14px 0 6px;
+  margin: 16px 0 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 .muted {
@@ -267,7 +390,7 @@ textarea {
 .stepper {
   display: flex;
   gap: 8px;
-  margin-bottom: 12px;
+  margin-bottom: 14px;
 }
 
 .step-opt {
@@ -275,11 +398,23 @@ textarea {
   text-align: center;
   padding: 12px 6px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 9px;
   font-size: 0.8rem;
   color: var(--sub);
   cursor: pointer;
   background: var(--panel);
+  line-height: 1.4;
+  transition: transform 0.15s ease, border-color 0.15s ease;
+}
+
+.step-opt:hover {
+  transform: translateY(-1px);
+}
+
+.step-opt small {
+  display: block;
+  font-size: 0.65rem;
+  opacity: 0.7;
 }
 
 .step-opt.sel {
@@ -290,20 +425,21 @@ textarea {
 
 .quiz-card {
   text-align: center;
-  padding: 30px 14px;
+  padding: 34px 16px;
 }
 
 .quiz-word {
-  font-size: 1.6rem;
-  margin-bottom: 18px;
+  font-size: 1.7rem;
+  margin-bottom: 20px;
+  font-weight: 700;
 }
 
 .opt-btn {
   display: block;
   width: 100%;
   border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 10px;
+  border-radius: 9px;
+  padding: 11px;
   margin-bottom: 8px;
   font-size: 0.85rem;
   text-align: left;
@@ -311,6 +447,11 @@ textarea {
   color: var(--ink);
   cursor: pointer;
   font-family: inherit;
+  transition: border-color 0.15s ease, transform 0.1s ease;
+}
+
+.opt-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
 }
 
 .opt-btn.correct {
@@ -324,22 +465,23 @@ textarea {
 }
 
 .result-bar {
-  height: 8px;
-  border-radius: 5px;
+  height: 9px;
+  border-radius: 6px;
   background: var(--line);
   overflow: hidden;
-  margin: 10px 0;
+  margin: 12px 0;
 }
 
 .result-fill {
   height: 100%;
   background: var(--accent);
+  transition: width 0.4s ease;
 }
 
 .flash-card {
   border: 1px solid var(--line);
-  border-radius: 12px;
-  padding: 40px 20px;
+  border-radius: var(--radius);
+  padding: 44px 20px;
   text-align: center;
   font-size: 1.4rem;
   cursor: pointer;
@@ -348,6 +490,12 @@ textarea {
   align-items: center;
   justify-content: center;
   background: var(--panel);
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.15s ease;
+}
+
+.flash-card:hover {
+  transform: translateY(-2px);
 }
 
 .ex-item {
@@ -363,6 +511,6 @@ textarea {
 .empty-state {
   text-align: center;
   color: var(--sub);
-  padding: 30px 10px;
+  padding: 34px 10px;
   font-size: 0.85rem;
 }

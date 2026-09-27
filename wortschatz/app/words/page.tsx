@@ -122,7 +122,8 @@ export default function WordsPage() {
         {!loading && !errorMsg && (
           <>
             <p className="muted" style={{ marginBottom: 10 }}>
-              총 <b style={{ color: "var(--ink)" }}>{words.length}</b>개 단어
+              총 <b style={{ color: "var(--ink)" }}>{words.length}</b>개 단어{" "}
+              <span style={{ opacity: 0.7 }}>Wörter insgesamt</span>
             </p>
 
             {!showListView && (
@@ -143,7 +144,7 @@ export default function WordsPage() {
                   ))}
                 </div>
                 <p className="muted" style={{ marginTop: 10 }}>
-                  글자를 누르면 해당 단어 목록이 나옵니다.
+                  글자를 누르면 해당 단어 목록이 나옵니다. Buchstabe antippen, um Wörter zu sehen.
                 </p>
               </>
             )}
@@ -152,7 +153,7 @@ export default function WordsPage() {
               <>
                 {!isSearching && (
                   <button className="btn ghost small" onClick={resetToGrid}>
-                    ‹ 전체 글자로
+                    ‹ 전체 글자로 Zurück zum Alphabet
                   </button>
                 )}
                 <div className="row" style={{ margin: "10px 0" }}>

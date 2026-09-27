@@ -200,18 +200,21 @@ export default function QuizPage() {
               onClick={() => setScope("all")}
             >
               전체 단어
+              <small>Alle Wörter</small>
             </div>
             <div
               className={`step-opt ${scope === "recent" ? "sel" : ""}`}
               onClick={() => setScope("recent")}
             >
               최근 추가
+              <small>Zuletzt hinzugefügt</small>
             </div>
             <div
               className={`step-opt ${scope === "difficulty" ? "sel" : ""}`}
               onClick={() => setScope("difficulty")}
             >
               난이도별
+              <small>Nach Niveau</small>
             </div>
           </div>
           {scope === "difficulty" && (
@@ -235,18 +238,21 @@ export default function QuizPage() {
               onClick={() => setMode("mc")}
             >
               객관식
+              <small>Multiple Choice</small>
             </div>
             <div
               className={`step-opt ${mode === "type" ? "sel" : ""}`}
               onClick={() => setMode("type")}
             >
               뜻 입력
+              <small>Bedeutung eingeben</small>
             </div>
             <div
               className={`step-opt ${mode === "flash" ? "sel" : ""}`}
               onClick={() => setMode("flash")}
             >
               플래시카드
+              <small>Karteikarten</small>
             </div>
           </div>
 
@@ -264,7 +270,7 @@ export default function QuizPage() {
               scopedPool.length === 0 || (mode === "mc" && scopedPool.length < 4)
             }
           >
-            퀴즈 시작
+            퀴즈 시작 Quiz starten
           </button>
         </div>
       </section>
@@ -329,11 +335,11 @@ export default function QuizPage() {
               <div style={{ marginTop: 14 }}>
                 {!typeChecked ? (
                   <button className="btn" onClick={handleTypeCheck}>
-                    확인
+                    확인 Prüfen
                   </button>
                 ) : (
                   <button className="btn" onClick={handleTypeNext}>
-                    다음
+                    다음 Weiter
                   </button>
                 )}
               </div>
@@ -349,7 +355,7 @@ export default function QuizPage() {
                 {!flipped ? word.word : word.meaning}
               </div>
               <p className="muted" style={{ marginTop: 8 }}>
-                카드를 눌러 뒤집어보세요
+                카드를 눌러 뒤집어보세요 Zum Umdrehen tippen
               </p>
               {flipped && (
                 <div className="row" style={{ marginTop: 14 }}>
@@ -357,10 +363,10 @@ export default function QuizPage() {
                     className="btn danger"
                     onClick={() => handleFlashGrade(false)}
                   >
-                    몰랐어요
+                    몰랐어요 Wusste ich nicht
                   </button>
                   <button className="btn" onClick={() => handleFlashGrade(true)}>
-                    알았어요
+                    알았어요 Wusste ich
                   </button>
                 </div>
               )}
@@ -402,7 +408,7 @@ export default function QuizPage() {
         )}
         <div className="row" style={{ marginTop: 14 }}>
           <button className="btn" onClick={() => setStage("setup")}>
-            다시 설정하기
+            다시 설정하기 Neu einstellen
           </button>
         </div>
       </div>

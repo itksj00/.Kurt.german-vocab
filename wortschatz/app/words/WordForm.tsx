@@ -221,13 +221,13 @@ export default function WordForm({ wordId }: { wordId?: number }) {
               className="btn ghost small"
               onClick={() => removeExampleField(i)}
             >
-              삭제
+              삭제 Löschen
             </button>
           )}
         </div>
       ))}
       <button type="button" className="btn ghost small" onClick={addExampleField}>
-        + 예문 추가
+        + 예문 추가 Beispiel hinzufügen
       </button>
 
       {errorMsg && (
@@ -238,7 +238,7 @@ export default function WordForm({ wordId }: { wordId?: number }) {
 
       <div className="row" style={{ marginTop: 16 }}>
         <button className="btn" type="submit" disabled={saving}>
-          {saving ? "저장 중..." : "저장"}
+          {saving ? "저장 중..." : "저장 Speichern"}
         </button>
         {isEdit && (
           <button
@@ -247,7 +247,7 @@ export default function WordForm({ wordId }: { wordId?: number }) {
             onClick={handleDelete}
             disabled={deleting}
           >
-            {deleting ? "삭제 중..." : "단어 삭제"}
+            {deleting ? "삭제 중..." : "단어 삭제 Wort löschen"}
           </button>
         )}
       </div>

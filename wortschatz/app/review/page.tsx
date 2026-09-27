@@ -77,7 +77,7 @@ export default function ReviewPage() {
                 className="btn ghost small"
                 onClick={() => resolveItem(r.id)}
               >
-                해결
+                해결 Erledigt
               </button>
             </div>
           ) : null
