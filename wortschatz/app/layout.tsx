@@ -13,9 +13,8 @@ const themeInitScript = `
 (function () {
   try {
     var saved = localStorage.getItem("wortschatz-theme");
-    var theme = saved || "system";
-    if (theme !== "system") {
-      document.documentElement.setAttribute("data-theme", theme);
+    if (saved === "dark" || saved === "light") {
+      document.documentElement.setAttribute("data-theme", saved);
     }
   } catch (e) {}
 })();
@@ -32,23 +31,23 @@ export default function RootLayout({
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
         <link
-          href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@400;500;700&display=swap"
+          href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&display=swap"
           rel="stylesheet"
         />
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
       <body>
-        <div className="app-shell">
-          <header className="app-header">
-            <div className="brand">
-              <span className="brand-ko">나만의 독일어 단어장</span>
-              <span className="brand-de">Mein Wortschatz</span>
-            </div>
-            <ThemeToggle />
-          </header>
+        <header className="site-header">
+          <div className="logo">
+            <b>나만의 독일어 단어장</b>
+            <span>Mein Wortschatz</span>
+          </div>
           <NavBar />
-          {children}
-        </div>
+          <div className="header-right">
+            <ThemeToggle />
+          </div>
+        </header>
+        {children}
       </body>
     </html>
   );

@@ -8,6 +8,8 @@ export type Word = {
   pronunciation: string | null;
   difficulty: Difficulty | null;
   wrong_count: number;
+  review_stage: number;
+  next_review_at: string | null;
   last_studied_at: string | null;
   created_at: string;
 };

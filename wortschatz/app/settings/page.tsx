@@ -213,7 +213,7 @@ export default function SettingsPage() {
   }
 
   return (
-    <section>
+    <main className="site-main narrow">
       <div className="card">
         <div className="section-title">데이터 내보내기 Export</div>
         <div className="row">
@@ -261,6 +261,6 @@ export default function SettingsPage() {
 
         {message && <p className="muted" style={{ marginTop: 10 }}>{message}</p>}
       </div>
-    </section>
+    </main>
   );
 }

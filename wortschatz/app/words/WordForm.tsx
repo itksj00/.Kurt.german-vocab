@@ -156,6 +156,8 @@ export default function WordForm({ wordId }: { wordId?: number }) {
   return (
     <form className="card" onSubmit={handleSubmit}>
       <div className="section-title">기본 정보 Grunddaten</div>
+
+
       <div className="row">
         <div className="field">
           <label>단어 (독일어) Wort</label>

@@ -4,8 +4,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import type { Difficulty, Word } from "@/lib/types";
+import { isDue, nextSchedule } from "@/lib/srs";
 
-type Scope = "all" | "recent" | "difficulty";
+type Scope = "due" | "all" | "recent" | "difficulty";
 type Mode = "mc" | "type" | "flash";
 
 const DIFFICULTIES: Difficulty[] = ["A1", "A2", "B1", "B2", "C1", "C2"];
@@ -28,7 +29,7 @@ export default function QuizPage() {
   const [allWords, setAllWords] = useState<Word[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const [scope, setScope] = useState<Scope>("all");
+  const [scope, setScope] = useState<Scope>("due");
   const [difficulty, setDifficulty] = useState<Difficulty>("A1");
   const [mode, setMode] = useState<Mode>("mc");
 
@@ -57,7 +58,7 @@ export default function QuizPage() {
       const { data, error } = await supabase
         .from("words")
         .select(
-          "id, word, meaning, part_of_speech, pronunciation, difficulty, wrong_count, last_studied_at, created_at"
+          "id, word, meaning, part_of_speech, pronunciation, difficulty, wrong_count, review_stage, next_review_at, last_studied_at, created_at"
         )
         .order("created_at", { ascending: false });
       if (!active) return;
@@ -71,6 +72,7 @@ export default function QuizPage() {
   }, []);
 
   const scopedPool = useMemo(() => {
+    if (scope === "due") return allWords.filter((w) => isDue(w.next_review_at));
     if (scope === "all") return allWords;
     if (scope === "recent") return allWords.slice(0, RECENT_COUNT);
     return allWords.filter((w) => w.difficulty === difficulty);
@@ -104,7 +106,7 @@ export default function QuizPage() {
     setQIndex(0);
     setAnswered([]);
     finalizedRef.current = false;
-    setupQuestion(q[0], pool);
+    setupQuestion(q[0], allWords);
     setStage("playing");
   }
 
@@ -116,7 +118,7 @@ export default function QuizPage() {
       setStage("result");
     } else {
       setQIndex(nextIndex);
-      setupQuestion(queue[nextIndex], scopedPool);
+      setupQuestion(queue[nextIndex], allWords);
     }
   }
 
@@ -146,55 +148,55 @@ export default function QuizPage() {
     goNext({ word, wrong: !knew });
   }
 
-  // 결과 화면 진입 시 wrong_count / last_studied_at / review_items 반영 (1회만).
+  // 결과 화면 진입 시 wrong_count / last_studied_at / 복습 일정 반영 (1회만).
   useEffect(() => {
     if (stage !== "result" || finalizedRef.current) return;
     finalizedRef.current = true;
 
     async function finalize() {
-      const now = new Date().toISOString();
-      const wrongIds = answered.filter((a) => a.wrong).map((a) => a.word.id);
-
+      const nowMs = Date.now();
+      const nowIso = new Date(nowMs).toISOString();
       await Promise.all(
-        answered.map((a) =>
-          supabase
-            .from("words")
-            .update({
-              last_studied_at: now,
-              wrong_count: a.wrong ? a.word.wrong_count + 1 : a.word.wrong_count,
-            })
-            .eq("id", a.word.id)
-        )
+        answered.map((a) => {
+          const update: Record<string, unknown> = {
+            last_studied_at: nowIso,
+            wrong_count: a.wrong ? a.word.wrong_count + 1 : a.word.wrong_count,
+          };
+          if (a.wrong) {
+            // 틀림 = 잊어버림 → 처음(1일)으로 리셋
+            Object.assign(update, nextSchedule(a.word.review_stage, false, nowMs));
+          } else if (isDue(a.word.next_review_at, nowMs)) {
+            // 복습 시점에 맞힘 → 한 단계 상승 (연습으로 미리 푼 경우는 일정 유지)
+            Object.assign(update, nextSchedule(a.word.review_stage, true, nowMs));
+          }
+          return supabase.from("words").update(update).eq("id", a.word.id);
+        })
       );
-
-      if (wrongIds.length > 0) {
-        const { data: existing } = await supabase
-          .from("review_items")
-          .select("word_id")
-          .eq("resolved", false)
-          .in("word_id", wrongIds);
-        const already = new Set((existing ?? []).map((r) => r.word_id));
-        const toInsert = wrongIds
-          .filter((id) => !already.has(id))
-          .map((word_id) => ({ word_id }));
-        if (toInsert.length > 0) {
-          await supabase.from("review_items").insert(toInsert);
-        }
-      }
     }
     finalize();
   }, [stage, answered]);
 
   if (loading) {
-    return <p className="muted">불러오는 중...</p>;
+    return (
+      <main className="site-main narrow">
+        <p className="muted">불러오는 중...</p>
+      </main>
+    );
   }
 
   if (stage === "setup") {
     return (
-      <section>
+      <main className="site-main narrow">
         <div className="card">
           <div className="section-title">1. 출제 범위</div>
           <div className="stepper">
+            <div
+              className={`step-opt ${scope === "due" ? "sel" : ""}`}
+              onClick={() => setScope("due")}
+            >
+              복습 대상
+              <small>Heute fällig</small>
+            </div>
             <div
               className={`step-opt ${scope === "all" ? "sel" : ""}`}
               onClick={() => setScope("all")}
@@ -258,8 +260,8 @@ export default function QuizPage() {
 
           <p className="muted" style={{ marginBottom: 10 }}>
             대상 단어 {scopedPool.length}개
-            {mode === "mc" && scopedPool.length < 4
-              ? " (객관식은 오답 보기를 위해 최소 4개 단어가 필요합니다)"
+            {mode === "mc" && allWords.length < 4
+              ? " (객관식은 오답 보기를 위해 전체 단어가 최소 4개 필요합니다)"
               : ""}
           </p>
 
@@ -267,20 +269,20 @@ export default function QuizPage() {
             className="btn"
             onClick={startQuiz}
             disabled={
-              scopedPool.length === 0 || (mode === "mc" && scopedPool.length < 4)
+              scopedPool.length === 0 || (mode === "mc" && allWords.length < 4)
             }
           >
             퀴즈 시작 Quiz starten
           </button>
         </div>
-      </section>
+      </main>
     );
   }
 
   if (stage === "playing") {
     const word = queue[qIndex];
     return (
-      <section>
+      <main className="site-main narrow">
         <div className="card quiz-card">
           <div className="muted">
             {qIndex + 1} / {queue.length}
@@ -352,7 +354,13 @@ export default function QuizPage() {
                 className="flash-card"
                 onClick={() => setFlipped((f) => !f)}
               >
-                {!flipped ? word.word : word.meaning}
+                {!flipped ? (
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
+                    <span>{word.word}</span>
+                  </div>
+                ) : (
+                  word.meaning
+                )}
               </div>
               <p className="muted" style={{ marginTop: 8 }}>
                 카드를 눌러 뒤집어보세요 Zum Umdrehen tippen
@@ -373,7 +381,7 @@ export default function QuizPage() {
             </>
           )}
         </div>
-      </section>
+      </main>
     );
   }
 
@@ -384,7 +392,7 @@ export default function QuizPage() {
   const rate = total > 0 ? Math.round((correctCount / total) * 100) : 0;
 
   return (
-    <section>
+    <main className="site-main narrow">
       <div className="card">
         <div className="section-title">결과 Ergebnis</div>
         <p className="muted">
@@ -395,11 +403,10 @@ export default function QuizPage() {
         </div>
         {wrongCount > 0 ? (
           <p className="muted" style={{ marginTop: 8 }}>
-            틀린 {wrongCount}개 단어 →{" "}
+            틀린 {wrongCount}개 단어는 1일 단계로 돌아가 내일 다시 복습됩니다 ·{" "}
             <Link href="/review" style={{ color: "var(--accent)" }}>
-              복습항목
+              복습 일정 보기
             </Link>
-            에 자동 등록됨
           </p>
         ) : (
           <p className="muted" style={{ marginTop: 8 }}>
@@ -412,6 +419,6 @@ export default function QuizPage() {
           </button>
         </div>
       </div>
-    </section>
+    </main>
   );
 }

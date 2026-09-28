@@ -2,8 +2,8 @@ import WordForm from "../WordForm";
 
 export default function AddWordPage() {
   return (
-    <section>
+    <main className="site-main narrow">
       <WordForm />
-    </section>
+    </main>
   );
 }

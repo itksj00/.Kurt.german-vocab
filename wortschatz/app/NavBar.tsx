@@ -15,7 +15,7 @@ export default function NavBar() {
   const pathname = usePathname();
 
   return (
-    <nav className="top-nav">
+    <nav className="site-nav">
       {TABS.map((tab) => {
         let active = pathname.startsWith(tab.href);
         if (tab.href === "/words" && pathname.startsWith("/words/add")) {

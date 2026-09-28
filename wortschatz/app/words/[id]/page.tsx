@@ -9,8 +9,8 @@ export default async function EditWordPage({
   const wordId = Number(id);
 
   return (
-    <section>
+    <main className="site-main narrow">
       <WordForm wordId={wordId} />
-    </section>
+    </main>
   );
 }
