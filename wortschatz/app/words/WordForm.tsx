@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
-import type { Difficulty } from "@/lib/types";
+import type { Difficulty, Gender } from "@/lib/types";
 
 const DIFFICULTIES: Difficulty[] = ["A1", "A2", "B1", "B2", "C1", "C2"];
 const PART_OF_SPEECH_OPTIONS = [
@@ -25,6 +25,9 @@ export default function WordForm({ wordId }: { wordId?: number }) {
   const [partOfSpeech, setPartOfSpeech] = useState(PART_OF_SPEECH_OPTIONS[0]);
   const [pronunciation, setPronunciation] = useState("");
   const [difficulty, setDifficulty] = useState<Difficulty>("A1");
+  const [gender, setGender] = useState<Gender | "">("");
+  const [hasPlural, setHasPlural] = useState(false);
+  const [plural, setPlural] = useState("");
   const [examples, setExamples] = useState<string[]>([""]);
 
   const [loading, setLoading] = useState(isEdit);
@@ -57,6 +60,9 @@ export default function WordForm({ wordId }: { wordId?: number }) {
       setPartOfSpeech(wordRow.part_of_speech ?? PART_OF_SPEECH_OPTIONS[0]);
       setPronunciation(wordRow.pronunciation ?? "");
       setDifficulty((wordRow.difficulty as Difficulty) ?? "A1");
+      setGender((wordRow.gender as Gender | null) ?? "");
+      setHasPlural(!!wordRow.plural);
+      setPlural(wordRow.plural ?? "");
       const sentences = (exampleRows ?? []).map((r) => r.sentence);
       setExamples(sentences.length > 0 ? sentences : [""]);
       setLoading(false);
@@ -88,6 +94,12 @@ export default function WordForm({ wordId }: { wordId?: number }) {
       return;
     }
 
+    const isNoun = partOfSpeech === "명사";
+    if (isNoun && hasPlural && !plural.trim()) {
+      setErrorMsg("복수형을 입력하거나 '복수' 체크를 해제해 주세요.");
+      return;
+    }
+
     setSaving(true);
     const cleanExamples = examples.map((s) => s.trim()).filter(Boolean);
     const payload = {
@@ -96,6 +108,8 @@ export default function WordForm({ wordId }: { wordId?: number }) {
       part_of_speech: partOfSpeech,
       pronunciation: pronunciation.trim() || null,
       difficulty,
+      gender: isNoun && gender ? gender : null,
+      plural: isNoun && hasPlural ? plural.trim() : null,
     };
 
     try {
@@ -208,6 +222,41 @@ export default function WordForm({ wordId }: { wordId?: number }) {
           </select>
         </div>
       </div>
+
+      {partOfSpeech === "명사" && (
+        <div className="row" style={{ marginTop: 8 }}>
+          <div className="field">
+            <label>성 Genus</label>
+            <select
+              value={gender}
+              onChange={(e) => setGender(e.target.value as Gender | "")}
+            >
+              <option value="">선택 안 함 –</option>
+              <option value="der">남성 maskulin (der)</option>
+              <option value="die">여성 feminin (die)</option>
+              <option value="das">중성 neutral (das)</option>
+            </select>
+          </div>
+          <div className="field">
+            <label>
+              <input
+                type="checkbox"
+                checked={hasPlural}
+                onChange={(e) => setHasPlural(e.target.checked)}
+                style={{ width: "auto", marginRight: 6 }}
+              />
+              복수 Plural
+            </label>
+            {hasPlural && (
+              <input
+                value={plural}
+                onChange={(e) => setPlural(e.target.value)}
+                placeholder="예: Tische"
+              />
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="section-title">예문 (여러 개 추가 가능) Beispielsätze</div>
       {examples.map((sentence, i) => (

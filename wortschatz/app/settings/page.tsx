@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import * as XLSX from "xlsx";
 import { supabase } from "@/lib/supabaseClient";
-import type { Difficulty } from "@/lib/types";
+import type { Difficulty, Gender } from "@/lib/types";
 
 const TEMPLATE_HEADERS = [
   "단어",
@@ -11,10 +11,23 @@ const TEMPLATE_HEADERS = [
   "품사",
   "발음",
   "난이도",
+  "성",
+  "복수형",
   "예문1",
   "예문2",
   "예문3",
 ];
+const GENDER_ALIASES: Record<string, Gender> = {
+  der: "der",
+  die: "die",
+  das: "das",
+  남성: "der",
+  여성: "die",
+  중성: "das",
+  m: "der",
+  f: "die",
+  n: "das",
+};
 const VALID_DIFFICULTIES: Difficulty[] = ["A1", "A2", "B1", "B2", "C1", "C2"];
 
 function downloadBlob(content: BlobPart, filename: string, type: string) {
@@ -33,6 +46,8 @@ type FullWord = {
   part_of_speech: string | null;
   pronunciation: string | null;
   difficulty: string | null;
+  gender: string | null;
+  plural: string | null;
   wrong_count: number;
   examples: { sentence: string }[];
 };
@@ -46,7 +61,7 @@ export default function SettingsPage() {
     const { data: words, error } = await supabase
       .from("words")
       .select(
-        "id, word, meaning, part_of_speech, pronunciation, difficulty, wrong_count"
+        "id, word, meaning, part_of_speech, pronunciation, difficulty, gender, plural, wrong_count"
       )
       .order("word", { ascending: true });
     if (error) throw error;
@@ -61,6 +76,8 @@ export default function SettingsPage() {
       part_of_speech: w.part_of_speech,
       pronunciation: w.pronunciation,
       difficulty: w.difficulty,
+      gender: w.gender,
+      plural: w.plural,
       wrong_count: w.wrong_count,
       examples: (examples ?? []).filter((e) => e.word_id === w.id),
     }));
@@ -77,6 +94,8 @@ export default function SettingsPage() {
         "품사",
         "발음",
         "난이도",
+        "성",
+        "복수형",
         "틀린횟수",
         "예문",
       ];
@@ -89,6 +108,8 @@ export default function SettingsPage() {
           r.part_of_speech ?? "",
           r.pronunciation ?? "",
           r.difficulty ?? "",
+          r.gender ?? "",
+          r.plural ?? "",
           String(r.wrong_count),
           examplesJoined,
         ].map((c) => `"${c.replace(/"/g, '""')}"`);
@@ -126,7 +147,7 @@ export default function SettingsPage() {
   function handleDownloadTemplate() {
     const ws = XLSX.utils.aoa_to_sheet([
       TEMPLATE_HEADERS,
-      ["Freiheit", "자유", "명사", "ˈfʁaɪhaɪt", "B1", "Freiheit ist wichtig.", "", ""],
+      ["Freiheit", "자유", "명사", "ˈfʁaɪhaɪt", "B1", "die", "Freiheiten", "Freiheit ist wichtig.", "", ""],
     ]);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "words");
@@ -168,14 +189,22 @@ export default function SettingsPage() {
           ? rawDifficulty
           : null;
 
+        const partOfSpeech = String(row["품사"] ?? "").trim() || null;
+        const isNoun = partOfSpeech === "명사";
+        const gender =
+          GENDER_ALIASES[String(row["성"] ?? "").trim().toLowerCase()] ?? null;
+        const plural = String(row["복수형"] ?? "").trim() || null;
+
         const { data: inserted, error } = await supabase
           .from("words")
           .insert({
             word,
             meaning,
-            part_of_speech: String(row["품사"] ?? "").trim() || null,
+            part_of_speech: partOfSpeech,
             pronunciation: String(row["발음"] ?? "").trim() || null,
             difficulty,
+            gender: isNoun ? gender : null,
+            plural: isNoun ? plural : null,
           })
           .select("id")
           .single();
@@ -242,8 +271,9 @@ export default function SettingsPage() {
           </button>
         </div>
         <p className="muted" style={{ margin: "6px 0 10px" }}>
-          템플릿의 열: 단어 · 뜻 · 품사 · 발음 · 난이도 · 예문1 · 예문2 · 예문3
-          (예문 칸은 비워둬도 되고, &ldquo;예문&rdquo;으로 시작하는 열은 몇 개든 추가해도
+          템플릿의 열: 단어 · 뜻 · 품사 · 발음 · 난이도 · 성 · 복수형 · 예문1 · 예문2 · 예문3
+          (성은 der/die/das 또는 남성/여성/중성, 명사일 때만 적용됩니다. 성·복수형·예문 칸은
+          비워둬도 되고, &ldquo;예문&rdquo;으로 시작하는 열은 몇 개든 추가해도
           인식됩니다.)
         </p>
         <label style={{ marginBottom: 4 }}>엑셀 파일 선택 Excel-Datei auswählen</label>

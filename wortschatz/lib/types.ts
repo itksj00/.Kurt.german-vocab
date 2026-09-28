@@ -1,5 +1,7 @@
 export type Difficulty = "A1" | "A2" | "B1" | "B2" | "C1" | "C2";
 
+export type Gender = "der" | "die" | "das";
+
 export type Word = {
   id: number;
   word: string;
@@ -7,6 +9,8 @@ export type Word = {
   part_of_speech: string | null;
   pronunciation: string | null;
   difficulty: Difficulty | null;
+  gender: Gender | null;
+  plural: string | null;
   wrong_count: number;
   review_stage: number;
   next_review_at: string | null;

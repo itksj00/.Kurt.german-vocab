@@ -5,6 +5,7 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import type { Difficulty, Word } from "@/lib/types";
 import { isDue, nextSchedule } from "@/lib/srs";
+import { withArticle } from "@/lib/wordDisplay";
 
 type Scope = "due" | "all" | "recent" | "difficulty";
 type Mode = "mc" | "type" | "flash";
@@ -58,7 +59,7 @@ export default function QuizPage() {
       const { data, error } = await supabase
         .from("words")
         .select(
-          "id, word, meaning, part_of_speech, pronunciation, difficulty, wrong_count, review_stage, next_review_at, last_studied_at, created_at"
+          "id, word, meaning, part_of_speech, pronunciation, difficulty, gender, plural, wrong_count, review_stage, next_review_at, last_studied_at, created_at"
         )
         .order("created_at", { ascending: false });
       if (!active) return;
@@ -290,7 +291,7 @@ export default function QuizPage() {
 
           {mode === "mc" && (
             <>
-              <div className="quiz-word">{word.word}</div>
+              <div className="quiz-word">{withArticle(word)}</div>
               {mcOptions.map((opt) => {
                 let cls = "opt-btn";
                 if (mcSelected) {
@@ -313,7 +314,7 @@ export default function QuizPage() {
 
           {mode === "type" && (
             <>
-              <div className="quiz-word">{word.word}</div>
+              <div className="quiz-word">{withArticle(word)}</div>
               <input
                 value={typeInput}
                 onChange={(e) => setTypeInput(e.target.value)}
@@ -356,7 +357,7 @@ export default function QuizPage() {
               >
                 {!flipped ? (
                   <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
-                    <span>{word.word}</span>
+                    <span>{withArticle(word)}</span>
                   </div>
                 ) : (
                   word.meaning
