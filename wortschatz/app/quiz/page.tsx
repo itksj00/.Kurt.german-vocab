@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import type { Difficulty, Word } from "@/lib/types";
 import { isDue, nextSchedule } from "@/lib/srs";
@@ -78,6 +77,11 @@ export default function QuizPage() {
     if (scope === "recent") return allWords.slice(0, RECENT_COUNT);
     return allWords.filter((w) => w.difficulty === difficulty);
   }, [allWords, scope, difficulty]);
+
+  const dueCount = useMemo(
+    () => allWords.filter((w) => isDue(w.next_review_at)).length,
+    [allWords]
+  );
 
   function setupQuestion(word: Word, pool: Word[]) {
     if (mode === "mc") {
@@ -180,7 +184,7 @@ export default function QuizPage() {
   if (loading) {
     return (
       <main className="site-main narrow">
-        <p className="muted">불러오는 중...</p>
+        <p className="muted">불러오는 중... Lädt...</p>
       </main>
     );
   }
@@ -189,7 +193,10 @@ export default function QuizPage() {
     return (
       <main className="site-main narrow">
         <div className="card">
-          <div className="section-title">1. 출제 범위</div>
+          <p className="muted" style={{ marginBottom: 12 }}>
+            오늘 복습할 단어 <b>{dueCount}</b>개 Heute fällig
+          </p>
+          <div className="section-title">1. 출제 범위 Umfang</div>
           <div className="stepper">
             <div
               className={`step-opt ${scope === "due" ? "sel" : ""}`}
@@ -234,7 +241,7 @@ export default function QuizPage() {
             </div>
           )}
 
-          <div className="section-title">2. 방식</div>
+          <div className="section-title">2. 방식 Modus</div>
           <div className="stepper">
             <div
               className={`step-opt ${mode === "mc" ? "sel" : ""}`}
@@ -404,10 +411,7 @@ export default function QuizPage() {
         </div>
         {wrongCount > 0 ? (
           <p className="muted" style={{ marginTop: 8 }}>
-            틀린 {wrongCount}개 단어는 1일 단계로 돌아가 내일 다시 복습됩니다 ·{" "}
-            <Link href="/review" style={{ color: "var(--accent)" }}>
-              복습 일정 보기
-            </Link>
+            틀린 {wrongCount}개 단어는 1일 단계로 돌아가 내일 다시 복습됩니다
           </p>
         ) : (
           <p className="muted" style={{ marginTop: 8 }}>

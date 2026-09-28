@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import type { Word } from "@/lib/types";
-import { withArticle } from "@/lib/wordDisplay";
+import { posLabel, withArticle } from "@/lib/wordDisplay";
 
 const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
 const PAGE_SIZE = 12;
@@ -141,9 +141,11 @@ export default function WordsPage() {
                 setPage(1);
               }}
             >
-              <option>전체 품사</option>
+              <option value="전체">전체 품사 Alle Wortarten</option>
               {posOptions.map((p) => (
-                <option key={p}>{p}</option>
+                <option key={p} value={p}>
+                  {posLabel(p)}
+                </option>
               ))}
             </select>
             <select
@@ -153,7 +155,7 @@ export default function WordsPage() {
                 setPage(1);
               }}
             >
-              <option>전체 난이도</option>
+              <option value="전체">전체 난이도 Alle Niveaus</option>
               {["A1", "A2", "B1", "B2", "C1", "C2"].map((d) => (
                 <option key={d}>{d}</option>
               ))}
@@ -161,11 +163,11 @@ export default function WordsPage() {
           </>
         )}
         <Link href="/words/add" className="btn">
-          + 단어 추가
+          + 단어 추가 Wort hinzufügen
         </Link>
       </div>
 
-      {loading && <p className="muted">불러오는 중...</p>}
+      {loading && <p className="muted">불러오는 중... Lädt...</p>}
       {errorMsg && (
         <p className="muted">데이터를 불러오지 못했습니다: {errorMsg}</p>
       )}
@@ -244,7 +246,9 @@ export default function WordsPage() {
                         </div>
                       </div>
                       <span className="badge">
-                        {[w.part_of_speech, w.difficulty].filter(Boolean).join(" · ") || "—"}
+                        {[w.part_of_speech ? posLabel(w.part_of_speech) : null, w.difficulty]
+                          .filter(Boolean)
+                          .join(" · ") || "—"}
                       </span>
                     </Link>
                   );

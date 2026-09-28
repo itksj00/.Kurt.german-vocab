@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import type { Difficulty, Gender } from "@/lib/types";
+import { posLabel } from "@/lib/wordDisplay";
 
 const DIFFICULTIES: Difficulty[] = ["A1", "A2", "B1", "B2", "C1", "C2"];
 const PART_OF_SPEECH_OPTIONS = [
@@ -164,7 +165,7 @@ export default function WordForm({ wordId }: { wordId?: number }) {
   }
 
   if (loading) {
-    return <p className="muted">불러오는 중...</p>;
+    return <p className="muted">불러오는 중... Lädt...</p>;
   }
 
   return (
@@ -198,7 +199,9 @@ export default function WordForm({ wordId }: { wordId?: number }) {
             onChange={(e) => setPartOfSpeech(e.target.value)}
           >
             {PART_OF_SPEECH_OPTIONS.map((p) => (
-              <option key={p}>{p}</option>
+              <option key={p} value={p}>
+                {posLabel(p)}
+              </option>
             ))}
           </select>
         </div>
@@ -231,7 +234,7 @@ export default function WordForm({ wordId }: { wordId?: number }) {
               value={gender}
               onChange={(e) => setGender(e.target.value as Gender | "")}
             >
-              <option value="">선택 안 함 –</option>
+              <option value="">선택 안 함 Keine Angabe</option>
               <option value="der">남성 maskulin (der)</option>
               <option value="die">여성 feminin (die)</option>
               <option value="das">중성 neutral (das)</option>
@@ -289,7 +292,7 @@ export default function WordForm({ wordId }: { wordId?: number }) {
 
       <div className="row" style={{ marginTop: 16 }}>
         <button className="btn" type="submit" disabled={saving}>
-          {saving ? "저장 중..." : "저장 Speichern"}
+          {saving ? "저장 중... Speichert..." : "저장 Speichern"}
         </button>
         {isEdit && (
           <button
@@ -298,7 +301,7 @@ export default function WordForm({ wordId }: { wordId?: number }) {
             onClick={handleDelete}
             disabled={deleting}
           >
-            {deleting ? "삭제 중..." : "단어 삭제 Wort löschen"}
+            {deleting ? "삭제 중... Löscht..." : "단어 삭제 Wort löschen"}
           </button>
         )}
       </div>

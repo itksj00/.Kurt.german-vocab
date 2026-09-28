@@ -251,14 +251,14 @@ export default function SettingsPage() {
             onClick={handleExportCSV}
             disabled={busy === "csv"}
           >
-            {busy === "csv" ? "내보내는 중..." : "CSV로 내보내기 Als CSV exportieren"}
+            {busy === "csv" ? "내보내는 중... Exportiert..." : "CSV로 내보내기 Als CSV exportieren"}
           </button>
           <button
             className="btn ghost"
             onClick={handleExportJSON}
             disabled={busy === "json"}
           >
-            {busy === "json" ? "내보내는 중..." : "JSON으로 내보내기 Als JSON exportieren"}
+            {busy === "json" ? "내보내는 중... Exportiert..." : "JSON으로 내보내기 Als JSON exportieren"}
           </button>
         </div>
 
