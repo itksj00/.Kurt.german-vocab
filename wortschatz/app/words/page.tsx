@@ -238,7 +238,11 @@ export default function WordsPage() {
                           <b>{withArticle(w)}</b>
                           <small>
                             {w.meaning}
-                            {w.plural ? ` · 복수: ${w.plural}` : ""}
+                            {w.gender === "pl"
+                              ? " · 복수형 전용 nur Plural"
+                              : w.plural
+                                ? ` · 복수: ${w.plural}`
+                                : ""}
                             {w.wrong_count > 0
                               ? ` · 틀림 ${w.wrong_count}회`
                               : ""}

@@ -24,6 +24,9 @@ const GENDER_ALIASES: Record<string, Gender> = {
   남성: "der",
   여성: "die",
   중성: "das",
+  복수: "pl",
+  "복수형 전용": "pl",
+  pl: "pl",
   m: "der",
   f: "die",
   n: "das",
@@ -204,7 +207,7 @@ export default function SettingsPage() {
             pronunciation: String(row["발음"] ?? "").trim() || null,
             difficulty,
             gender: isNoun ? gender : null,
-            plural: isNoun ? plural : null,
+            plural: isNoun && gender !== "pl" ? plural : null,
           })
           .select("id")
           .single();
@@ -272,7 +275,7 @@ export default function SettingsPage() {
         </div>
         <p className="muted" style={{ margin: "6px 0 10px" }}>
           템플릿의 열: 단어 · 뜻 · 품사 · 발음 · 난이도 · 성 · 복수형 · 예문1 · 예문2 · 예문3
-          (성은 der/die/das 또는 남성/여성/중성, 명사일 때만 적용됩니다. 성·복수형·예문 칸은
+          (성은 der/die/das, 남성/여성/중성, 복수형으로만 쓰는 단어는 pl 또는 복수, 명사일 때만 적용됩니다. 성·복수형·예문 칸은
           비워둬도 되고, &ldquo;예문&rdquo;으로 시작하는 열은 몇 개든 추가해도
           인식됩니다.)
         </p>

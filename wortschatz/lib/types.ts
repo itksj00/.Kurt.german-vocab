@@ -1,6 +1,7 @@
 export type Difficulty = "A1" | "A2" | "B1" | "B2" | "C1" | "C2";
 
-export type Gender = "der" | "die" | "das";
+// "pl" = 복수형으로만 존재하는 단어 (예: die Eltern)
+export type Gender = "der" | "die" | "das" | "pl";
 
 export type Word = {
   id: number;

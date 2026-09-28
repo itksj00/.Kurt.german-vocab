@@ -96,7 +96,7 @@ export default function WordForm({ wordId }: { wordId?: number }) {
     }
 
     const isNoun = partOfSpeech === "명사";
-    if (isNoun && hasPlural && !plural.trim()) {
+    if (isNoun && gender !== "pl" && hasPlural && !plural.trim()) {
       setErrorMsg("복수형을 입력하거나 '복수' 체크를 해제해 주세요.");
       return;
     }
@@ -110,7 +110,7 @@ export default function WordForm({ wordId }: { wordId?: number }) {
       pronunciation: pronunciation.trim() || null,
       difficulty,
       gender: isNoun && gender ? gender : null,
-      plural: isNoun && hasPlural ? plural.trim() : null,
+      plural: isNoun && hasPlural && gender !== "pl" ? plural.trim() : null,
     };
 
     try {
@@ -232,12 +232,21 @@ export default function WordForm({ wordId }: { wordId?: number }) {
             <label>성 Genus</label>
             <select
               value={gender}
-              onChange={(e) => setGender(e.target.value as Gender | "")}
+              onChange={(e) => {
+                const next = e.target.value as Gender | "";
+                setGender(next);
+                if (next === "pl") {
+                  // 복수형 전용 단어는 별도 복수형이 없다.
+                  setHasPlural(false);
+                  setPlural("");
+                }
+              }}
             >
               <option value="">선택 안 함 Keine Angabe</option>
               <option value="der">남성 maskulin (der)</option>
               <option value="die">여성 feminin (die)</option>
               <option value="das">중성 neutral (das)</option>
+              <option value="pl">복수형 전용 nur Plural (die)</option>
             </select>
           </div>
           <div className="field">
@@ -245,6 +254,7 @@ export default function WordForm({ wordId }: { wordId?: number }) {
               <input
                 type="checkbox"
                 checked={hasPlural}
+                disabled={gender === "pl"}
                 onChange={(e) => setHasPlural(e.target.checked)}
                 style={{ width: "auto", marginRight: 6 }}
               />
