@@ -20,3 +20,11 @@ const POS_DE: Record<string, string> = {
 export function posLabel(pos: string): string {
   return POS_DE[pos] ? `${pos} ${POS_DE[pos]}` : pos;
 }
+
+// 과거형(Perfekt) 표시: haben → "hat gemacht", sein → "ist gegangen"
+export function perfektText(
+  w: Pick<Word, "perfekt_aux" | "partizip2">
+): string | null {
+  if (!w.perfekt_aux || !w.partizip2) return null;
+  return `${w.perfekt_aux === "haben" ? "hat" : "ist"} ${w.partizip2}`;
+}

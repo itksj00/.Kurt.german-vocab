@@ -8,7 +8,41 @@ import { isDue, nextSchedule } from "@/lib/srs";
 import { withArticle } from "@/lib/wordDisplay";
 
 type Scope = "due" | "all" | "recent" | "difficulty";
-type Mode = "mc" | "type" | "flash";
+type Mode = "mc" | "type" | "flash" | "de" | "cloze";
+
+const UMLAUTS = ["ä", "ö", "ü", "ß"];
+
+// 입력값 비교용: 유니코드 정규화(NFC) + 공백 정리 + 대소문자 무시. ä↔a, ß↔ss는 같게 보지 않는다.
+function norm(v: string): string {
+  return v.normalize("NFC").trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+function escapeRegExp(v: string): string {
+  return v.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+// 예문에서 단어(또는 복수형)가 독립된 단어로 쓰인 부분을 찾아 빈칸 문제를 만든다.
+function makeCloze(
+  sentence: string,
+  candidates: (string | null)[]
+): { text: string; answer: string } | null {
+  const src = sentence.normalize("NFC");
+  for (const c of candidates) {
+    if (!c) continue;
+    const re = new RegExp(
+      `(?<![\\p{L}])${escapeRegExp(c.normalize("NFC"))}(?![\\p{L}])`,
+      "iu"
+    );
+    const m = re.exec(src);
+    if (m) {
+      return {
+        text: src.slice(0, m.index) + "_____" + src.slice(m.index + m[0].length),
+        answer: m[0],
+      };
+    }
+  }
+  return null;
+}
 
 const DIFFICULTIES: Difficulty[] = ["A1", "A2", "B1", "B2", "C1", "C2"];
 const RECENT_COUNT = 20;
@@ -20,6 +54,10 @@ function shuffle<T>(arr: T[]): T[] {
     [a[i], a[j]] = [a[j], a[i]];
   }
   return a;
+}
+
+function pickRandom<T>(arr: T[]): T | null {
+  return arr.length ? arr[Math.floor(Math.random() * arr.length)] : null;
 }
 
 export type Stage = "setup" | "playing" | "result";
@@ -34,6 +72,9 @@ type Props = {
 
 export default function QuizRunner({ lockedScope, onStageChange }: Props) {
   const [allWords, setAllWords] = useState<Word[]>([]);
+  const [examplesByWord, setExamplesByWord] = useState<
+    Record<number, string[]>
+  >({});
   const [loading, setLoading] = useState(true);
 
   const [scope, setScope] = useState<Scope>(lockedScope ?? "due");
@@ -58,6 +99,12 @@ export default function QuizRunner({ lockedScope, onStageChange }: Props) {
   // 플래시카드 상태
   const [flipped, setFlipped] = useState(false);
 
+  // 예문 빈칸 상태 (입력 상태는 뜻 입력과 공유)
+  const [cloze, setCloze] = useState<{ text: string; answer: string } | null>(
+    null
+  );
+  const inputRef = useRef<HTMLInputElement>(null);
+
   const finalizedRef = useRef(false);
 
   useEffect(() => {
@@ -66,11 +113,20 @@ export default function QuizRunner({ lockedScope, onStageChange }: Props) {
       const { data, error } = await supabase
         .from("words")
         .select(
-          "id, word, meaning, part_of_speech, pronunciation, difficulty, gender, plural, wrong_count, review_stage, next_review_at, last_studied_at, created_at"
+          "id, word, meaning, part_of_speech, pronunciation, difficulty, gender, plural, perfekt_aux, partizip2, wrong_count, review_stage, next_review_at, last_studied_at, created_at"
         )
         .order("created_at", { ascending: false });
       if (!active) return;
+      const { data: exData } = await supabase
+        .from("examples")
+        .select("word_id, sentence");
+      if (!active) return;
       if (!error) setAllWords(data ?? []);
+      const map: Record<number, string[]> = {};
+      (exData ?? []).forEach((e) => {
+        (map[e.word_id] ??= []).push(e.sentence);
+      });
+      setExamplesByWord(map);
       setLoading(false);
     }
     load();
@@ -85,6 +141,22 @@ export default function QuizRunner({ lockedScope, onStageChange }: Props) {
     if (scope === "recent") return allWords.slice(0, RECENT_COUNT);
     return allWords.filter((w) => w.difficulty === difficulty);
   }, [allWords, scope, difficulty]);
+
+  // 빈칸 퀴즈는 예문 속에 단어(또는 복수형)가 그대로 들어 있는 단어만 출제할 수 있다.
+  function clozeOptions(w: Word): { text: string; answer: string }[] {
+    return (examplesByWord[w.id] ?? [])
+      .map((sent) => makeCloze(sent, [w.word, w.plural]))
+      .filter((c): c is { text: string; answer: string } => c !== null);
+  }
+
+  const modePool = useMemo(
+    () =>
+      mode === "cloze"
+        ? scopedPool.filter((w) => clozeOptions(w).length > 0)
+        : scopedPool,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [mode, scopedPool, examplesByWord]
+  );
 
   function changeStage(next: Stage) {
     setStage(next);
@@ -104,7 +176,11 @@ export default function QuizRunner({ lockedScope, onStageChange }: Props) {
       const options = shuffle([word.meaning, ...distractors]);
       setMcOptions(options);
       setMcSelected(null);
-    } else if (mode === "type") {
+    } else if (mode === "type" || mode === "de" || mode === "cloze") {
+      if (mode === "cloze") {
+        const opts = clozeOptions(word);
+        setCloze(pickRandom(opts));
+      }
       setTypeInput("");
       setTypeChecked(false);
       setTypeCorrect(false);
@@ -114,7 +190,7 @@ export default function QuizRunner({ lockedScope, onStageChange }: Props) {
   }
 
   function startQuiz() {
-    const pool = scopedPool;
+    const pool = modePool;
     if (pool.length === 0) return;
     const q = shuffle(pool);
     setQueue(q);
@@ -147,10 +223,26 @@ export default function QuizRunner({ lockedScope, onStageChange }: Props) {
 
   function handleTypeCheck() {
     const word = queue[qIndex];
-    const ok =
-      typeInput.trim().toLowerCase() === word.meaning.trim().toLowerCase();
+    const expected =
+      mode === "de"
+        ? word.word
+        : mode === "cloze"
+          ? (cloze?.answer ?? "")
+          : word.meaning;
+    const ok = norm(typeInput) === norm(expected);
     setTypeChecked(true);
     setTypeCorrect(ok);
+  }
+
+  function insertChar(ch: string) {
+    const el = inputRef.current;
+    const start = el?.selectionStart ?? typeInput.length;
+    const end = el?.selectionEnd ?? start;
+    setTypeInput(typeInput.slice(0, start) + ch + typeInput.slice(end));
+    requestAnimationFrame(() => {
+      el?.focus();
+      el?.setSelectionRange(start + 1, start + 1);
+    });
   }
 
   function handleTypeNext() {
@@ -256,7 +348,7 @@ export default function QuizRunner({ lockedScope, onStageChange }: Props) {
           <div className="section-title">
             {lockedScope ? "1." : "2."} 방식 Modus
           </div>
-          <div className="stepper">
+          <div className="stepper" style={{ flexWrap: "wrap" }}>
             <div
               className={`step-opt ${mode === "mc" ? "sel" : ""}`}
               onClick={() => setMode("mc")}
@@ -272,6 +364,20 @@ export default function QuizRunner({ lockedScope, onStageChange }: Props) {
               <small>Bedeutung eingeben</small>
             </div>
             <div
+              className={`step-opt ${mode === "de" ? "sel" : ""}`}
+              onClick={() => setMode("de")}
+            >
+              독일어 입력
+              <small>Deutsch eingeben</small>
+            </div>
+            <div
+              className={`step-opt ${mode === "cloze" ? "sel" : ""}`}
+              onClick={() => setMode("cloze")}
+            >
+              예문 빈칸
+              <small>Lückentext</small>
+            </div>
+            <div
               className={`step-opt ${mode === "flash" ? "sel" : ""}`}
               onClick={() => setMode("flash")}
             >
@@ -281,7 +387,10 @@ export default function QuizRunner({ lockedScope, onStageChange }: Props) {
           </div>
 
           <p className="muted" style={{ marginBottom: 10 }}>
-            대상 단어 {scopedPool.length}개
+            대상 단어 {modePool.length}개
+            {mode === "cloze" && modePool.length < scopedPool.length
+              ? ` (예문에 단어가 그대로 들어 있는 것만 · 전체 ${scopedPool.length}개 중)`
+              : ""}
             {mode === "mc" && allWords.length < 4
               ? " (객관식은 오답 보기를 위해 전체 단어가 최소 4개 필요합니다)"
               : ""}
@@ -291,7 +400,7 @@ export default function QuizRunner({ lockedScope, onStageChange }: Props) {
             className="btn"
             onClick={startQuiz}
             disabled={
-              scopedPool.length === 0 || (mode === "mc" && allWords.length < 4)
+              modePool.length === 0 || (mode === "mc" && allWords.length < 4)
             }
           >
             퀴즈 시작 Quiz starten
@@ -354,6 +463,78 @@ export default function QuizRunner({ lockedScope, onStageChange }: Props) {
                   }}
                 >
                   {typeCorrect ? "정답!" : `오답 — 정답: ${word.meaning}`}
+                </p>
+              )}
+              <div style={{ marginTop: 14 }}>
+                {!typeChecked ? (
+                  <button className="btn" onClick={handleTypeCheck}>
+                    확인 Prüfen
+                  </button>
+                ) : (
+                  <button className="btn" onClick={handleTypeNext}>
+                    다음 Weiter
+                  </button>
+                )}
+              </div>
+            </>
+          )}
+
+          {(mode === "de" || mode === "cloze") && (
+            <>
+              {mode === "de" ? (
+                <>
+                  <div className="quiz-word">{word.meaning}</div>
+                  <p className="muted">
+                    독일어로 입력하세요 (관사 제외) Auf Deutsch, ohne Artikel
+                  </p>
+                </>
+              ) : (
+                <>
+                  <div className="quiz-word" style={{ fontSize: "1.3rem" }}>
+                    {cloze?.text}
+                  </div>
+                  <p className="muted">힌트 Hinweis: {word.meaning}</p>
+                </>
+              )}
+              <input
+                ref={inputRef}
+                value={typeInput}
+                onChange={(e) => setTypeInput(e.target.value)}
+                placeholder="Antwort"
+                disabled={typeChecked}
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !typeChecked) handleTypeCheck();
+                }}
+              />
+              {!typeChecked && (
+                <div className="row" style={{ marginTop: 8, gap: 6 }}>
+                  {UMLAUTS.map((ch) => (
+                    <button
+                      key={ch}
+                      type="button"
+                      className="btn"
+                      style={{ flex: "0 0 auto", padding: "6px 14px" }}
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => insertChar(ch)}
+                    >
+                      {ch}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {typeChecked && (
+                <p
+                  className="muted"
+                  style={{
+                    marginTop: 10,
+                    color: typeCorrect ? "var(--accent)" : "var(--danger)",
+                  }}
+                >
+                  {typeCorrect ? "정답!" : "오답"} — {" "}
+                  {mode === "de" ? withArticle(word) : cloze?.answer}
                 </p>
               )}
               <div style={{ marginTop: 14 }}>

@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import type { Word } from "@/lib/types";
-import { posLabel, withArticle } from "@/lib/wordDisplay";
+import { perfektText, posLabel, withArticle } from "@/lib/wordDisplay";
 
 const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
 const PAGE_SIZE = 12;
@@ -34,7 +34,7 @@ export default function WordsPage() {
       const { data, error } = await supabase
         .from("words")
         .select(
-          "id, word, meaning, part_of_speech, pronunciation, difficulty, gender, plural, wrong_count, review_stage, next_review_at, last_studied_at, created_at"
+          "id, word, meaning, part_of_speech, pronunciation, difficulty, gender, plural, perfekt_aux, partizip2, wrong_count, review_stage, next_review_at, last_studied_at, created_at"
         )
         .order("word", { ascending: true });
       if (!active) return;
@@ -243,6 +243,9 @@ export default function WordsPage() {
                               : w.plural
                                 ? ` · 복수: ${w.plural}`
                                 : ""}
+                            {perfektText(w)
+                              ? ` · 과거 Perfekt: ${perfektText(w)}`
+                              : ""}
                             {w.wrong_count > 0
                               ? ` · 틀림 ${w.wrong_count}회`
                               : ""}

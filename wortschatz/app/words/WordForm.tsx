@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
-import type { Difficulty, Gender } from "@/lib/types";
+import type { Difficulty, Gender, PerfektAux } from "@/lib/types";
 import { posLabel } from "@/lib/wordDisplay";
 
 const DIFFICULTIES: Difficulty[] = ["A1", "A2", "B1", "B2", "C1", "C2"];
@@ -29,6 +29,9 @@ export default function WordForm({ wordId }: { wordId?: number }) {
   const [gender, setGender] = useState<Gender | "">("");
   const [hasPlural, setHasPlural] = useState(false);
   const [plural, setPlural] = useState("");
+  const [hasPerfekt, setHasPerfekt] = useState(false);
+  const [perfektAux, setPerfektAux] = useState<PerfektAux>("haben");
+  const [partizip2, setPartizip2] = useState("");
   const [examples, setExamples] = useState<string[]>([""]);
 
   const [loading, setLoading] = useState(isEdit);
@@ -64,6 +67,9 @@ export default function WordForm({ wordId }: { wordId?: number }) {
       setGender((wordRow.gender as Gender | null) ?? "");
       setHasPlural(!!wordRow.plural);
       setPlural(wordRow.plural ?? "");
+      setHasPerfekt(!!wordRow.partizip2);
+      setPerfektAux((wordRow.perfekt_aux as PerfektAux | null) ?? "haben");
+      setPartizip2(wordRow.partizip2 ?? "");
       const sentences = (exampleRows ?? []).map((r) => r.sentence);
       setExamples(sentences.length > 0 ? sentences : [""]);
       setLoading(false);
@@ -101,6 +107,12 @@ export default function WordForm({ wordId }: { wordId?: number }) {
       return;
     }
 
+    const isVerb = partOfSpeech === "동사";
+    if (isVerb && hasPerfekt && !partizip2.trim()) {
+      setErrorMsg("과거분사를 입력하거나 '과거형' 체크를 해제해 주세요.");
+      return;
+    }
+
     setSaving(true);
     const cleanExamples = examples.map((s) => s.trim()).filter(Boolean);
     const payload = {
@@ -111,6 +123,8 @@ export default function WordForm({ wordId }: { wordId?: number }) {
       difficulty,
       gender: isNoun && gender ? gender : null,
       plural: isNoun && hasPlural && gender !== "pl" ? plural.trim() : null,
+      perfekt_aux: isVerb && hasPerfekt ? perfektAux : null,
+      partizip2: isVerb && hasPerfekt ? partizip2.trim() : null,
     };
 
     try {
@@ -268,6 +282,41 @@ export default function WordForm({ wordId }: { wordId?: number }) {
               />
             )}
           </div>
+        </div>
+      )}
+
+      {partOfSpeech === "동사" && (
+        <div className="row" style={{ marginTop: 8 }}>
+          <div className="field">
+            <label>
+              <input
+                type="checkbox"
+                checked={hasPerfekt}
+                onChange={(e) => setHasPerfekt(e.target.checked)}
+                style={{ width: "auto", marginRight: 6 }}
+              />
+              과거형 Perfekt
+            </label>
+            {hasPerfekt && (
+              <select
+                value={perfektAux}
+                onChange={(e) => setPerfektAux(e.target.value as PerfektAux)}
+              >
+                <option value="haben">haben + Partizip II</option>
+                <option value="sein">sein + Partizip II</option>
+              </select>
+            )}
+          </div>
+          {hasPerfekt && (
+            <div className="field">
+              <label>과거분사 Partizip II</label>
+              <input
+                value={partizip2}
+                onChange={(e) => setPartizip2(e.target.value)}
+                placeholder="예: gemacht"
+              />
+            </div>
+          )}
         </div>
       )}
 
