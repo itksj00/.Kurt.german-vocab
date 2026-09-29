@@ -60,6 +60,13 @@ function pickRandom<T>(arr: T[]): T | null {
   return arr.length ? arr[Math.floor(Math.random() * arr.length)] : null;
 }
 
+type ClozeQ = {
+  text: string;
+  answer: string;
+  sentence: string;
+  translation: string | null;
+};
+
 export type Stage = "setup" | "playing" | "result";
 
 type Answered = { word: Word; wrong: boolean };
@@ -73,7 +80,7 @@ type Props = {
 export default function QuizRunner({ lockedScope, onStageChange }: Props) {
   const [allWords, setAllWords] = useState<Word[]>([]);
   const [examplesByWord, setExamplesByWord] = useState<
-    Record<number, string[]>
+    Record<number, { sentence: string; translation: string | null }[]>
   >({});
   const [loading, setLoading] = useState(true);
 
@@ -100,9 +107,7 @@ export default function QuizRunner({ lockedScope, onStageChange }: Props) {
   const [flipped, setFlipped] = useState(false);
 
   // 예문 빈칸 상태 (입력 상태는 뜻 입력과 공유)
-  const [cloze, setCloze] = useState<{ text: string; answer: string } | null>(
-    null
-  );
+  const [cloze, setCloze] = useState<ClozeQ | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const finalizedRef = useRef(false);
@@ -119,12 +124,18 @@ export default function QuizRunner({ lockedScope, onStageChange }: Props) {
       if (!active) return;
       const { data: exData } = await supabase
         .from("examples")
-        .select("word_id, sentence");
+        .select("word_id, sentence, translation");
       if (!active) return;
       if (!error) setAllWords(data ?? []);
-      const map: Record<number, string[]> = {};
+      const map: Record<
+        number,
+        { sentence: string; translation: string | null }[]
+      > = {};
       (exData ?? []).forEach((e) => {
-        (map[e.word_id] ??= []).push(e.sentence);
+        (map[e.word_id] ??= []).push({
+          sentence: e.sentence,
+          translation: e.translation ?? null,
+        });
       });
       setExamplesByWord(map);
       setLoading(false);
@@ -143,10 +154,19 @@ export default function QuizRunner({ lockedScope, onStageChange }: Props) {
   }, [allWords, scope, difficulty]);
 
   // 빈칸 퀴즈는 예문 속에 단어(또는 복수형)가 그대로 들어 있는 단어만 출제할 수 있다.
-  function clozeOptions(w: Word): { text: string; answer: string }[] {
-    return (examplesByWord[w.id] ?? [])
-      .map((sent) => makeCloze(sent, [w.word, w.plural]))
-      .filter((c): c is { text: string; answer: string } => c !== null);
+  function clozeOptions(w: Word): ClozeQ[] {
+    const out: ClozeQ[] = [];
+    for (const ex of examplesByWord[w.id] ?? []) {
+      const c = makeCloze(ex.sentence, [w.word, w.plural]);
+      if (c) {
+        out.push({
+          ...c,
+          sentence: ex.sentence.normalize("NFC"),
+          translation: ex.translation,
+        });
+      }
+    }
+    return out;
   }
 
   const modePool = useMemo(
@@ -493,7 +513,11 @@ export default function QuizRunner({ lockedScope, onStageChange }: Props) {
                   <div className="quiz-word" style={{ fontSize: "1.3rem" }}>
                     {cloze?.text}
                   </div>
-                  <p className="muted">힌트 Hinweis: {word.meaning}</p>
+                  <p className="muted">
+                    {cloze?.translation
+                      ? `예문 뜻 Übersetzung: ${cloze.translation}`
+                      : `힌트 Hinweis: ${word.meaning}`}
+                  </p>
                 </>
               )}
               <input
@@ -535,6 +559,13 @@ export default function QuizRunner({ lockedScope, onStageChange }: Props) {
                 >
                   {typeCorrect ? "정답!" : "오답"} — {" "}
                   {mode === "de" ? withArticle(word) : cloze?.answer}
+                </p>
+              )}
+              {typeChecked && mode === "cloze" && cloze && (
+                <p className="muted" style={{ marginTop: 6 }}>
+                  {cloze.sentence}
+                  {cloze.translation ? ` — ${cloze.translation}` : ""}
+                  {` (${word.meaning})`}
                 </p>
               )}
               <div style={{ marginTop: 14 }}>

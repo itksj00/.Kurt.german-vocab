@@ -32,7 +32,9 @@ export default function WordForm({ wordId }: { wordId?: number }) {
   const [hasPerfekt, setHasPerfekt] = useState(false);
   const [perfektAux, setPerfektAux] = useState<PerfektAux>("haben");
   const [partizip2, setPartizip2] = useState("");
-  const [examples, setExamples] = useState<string[]>([""]);
+  const [examples, setExamples] = useState<{ sentence: string; translation: string }[]>([
+    { sentence: "", translation: "" },
+  ]);
 
   const [loading, setLoading] = useState(isEdit);
   const [saving, setSaving] = useState(false);
@@ -56,7 +58,7 @@ export default function WordForm({ wordId }: { wordId?: number }) {
       }
       const { data: exampleRows } = await supabase
         .from("examples")
-        .select("sentence")
+        .select("sentence, translation")
         .eq("word_id", wordId);
 
       setWord(wordRow.word);
@@ -70,8 +72,11 @@ export default function WordForm({ wordId }: { wordId?: number }) {
       setHasPerfekt(!!wordRow.partizip2);
       setPerfektAux((wordRow.perfekt_aux as PerfektAux | null) ?? "haben");
       setPartizip2(wordRow.partizip2 ?? "");
-      const sentences = (exampleRows ?? []).map((r) => r.sentence);
-      setExamples(sentences.length > 0 ? sentences : [""]);
+      const loaded = (exampleRows ?? []).map((r) => ({
+        sentence: r.sentence as string,
+        translation: (r.translation as string | null) ?? "",
+      }));
+      setExamples(loaded.length > 0 ? loaded : [{ sentence: "", translation: "" }]);
       setLoading(false);
     }
     load();
@@ -80,12 +85,18 @@ export default function WordForm({ wordId }: { wordId?: number }) {
     };
   }, [isEdit, wordId]);
 
-  function updateExample(index: number, value: string) {
-    setExamples((prev) => prev.map((s, i) => (i === index ? value : s)));
+  function updateExample(
+    index: number,
+    field: "sentence" | "translation",
+    value: string
+  ) {
+    setExamples((prev) =>
+      prev.map((ex, i) => (i === index ? { ...ex, [field]: value } : ex))
+    );
   }
 
   function addExampleField() {
-    setExamples((prev) => [...prev, ""]);
+    setExamples((prev) => [...prev, { sentence: "", translation: "" }]);
   }
 
   function removeExampleField(index: number) {
@@ -114,7 +125,12 @@ export default function WordForm({ wordId }: { wordId?: number }) {
     }
 
     setSaving(true);
-    const cleanExamples = examples.map((s) => s.trim()).filter(Boolean);
+    const cleanExamples = examples
+      .map((ex) => ({
+        sentence: ex.sentence.trim(),
+        translation: ex.translation.trim(),
+      }))
+      .filter((ex) => ex.sentence);
     const payload = {
       word: word.trim(),
       meaning: meaning.trim(),
@@ -147,9 +163,10 @@ export default function WordForm({ wordId }: { wordId?: number }) {
       }
 
       if (cleanExamples.length > 0 && targetId) {
-        const rows = cleanExamples.map((sentence) => ({
+        const rows = cleanExamples.map((ex) => ({
           word_id: targetId,
-          sentence,
+          sentence: ex.sentence,
+          translation: ex.translation || null,
         }));
         const { error: exErr } = await supabase.from("examples").insert(rows);
         if (exErr) throw exErr;
@@ -321,13 +338,22 @@ export default function WordForm({ wordId }: { wordId?: number }) {
       )}
 
       <div className="section-title">예문 (여러 개 추가 가능) Beispielsätze</div>
-      {examples.map((sentence, i) => (
-        <div className="ex-item" key={i}>
-          <input
-            value={sentence}
-            onChange={(e) => updateExample(i, e.target.value)}
-            placeholder={`예문 ${i + 1}`}
-          />
+      {examples.map((ex, i) => (
+        <div className="ex-item" key={i} style={{ alignItems: "flex-start" }}>
+          <div
+            style={{ flex: 1, display: "flex", flexDirection: "column", gap: 6 }}
+          >
+            <input
+              value={ex.sentence}
+              onChange={(e) => updateExample(i, "sentence", e.target.value)}
+              placeholder={`예문 ${i + 1} (독일어) Beispielsatz`}
+            />
+            <input
+              value={ex.translation}
+              onChange={(e) => updateExample(i, "translation", e.target.value)}
+              placeholder="예문 뜻 (한국어) Übersetzung"
+            />
+          </div>
           {examples.length > 1 && (
             <button
               type="button"

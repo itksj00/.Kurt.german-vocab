@@ -27,6 +27,7 @@ export type Example = {
   id: number;
   word_id: number;
   sentence: string;
+  translation: string | null;
 };
 
 export type ReviewItem = {

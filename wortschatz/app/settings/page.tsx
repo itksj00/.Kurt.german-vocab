@@ -16,8 +16,11 @@ const TEMPLATE_HEADERS = [
   "조동사",
   "과거분사",
   "예문1",
+  "예문1뜻",
   "예문2",
+  "예문2뜻",
   "예문3",
+  "예문3뜻",
 ];
 const GENDER_ALIASES: Record<string, Gender> = {
   der: "der",
@@ -62,7 +65,7 @@ type FullWord = {
   perfekt_aux: string | null;
   partizip2: string | null;
   wrong_count: number;
-  examples: { sentence: string }[];
+  examples: { sentence: string; translation: string | null }[];
 };
 
 export default function SettingsPage() {
@@ -81,7 +84,7 @@ export default function SettingsPage() {
 
     const { data: examples } = await supabase
       .from("examples")
-      .select("word_id, sentence");
+      .select("word_id, sentence, translation");
 
     return (words ?? []).map((w) => ({
       word: w.word,
@@ -115,10 +118,14 @@ export default function SettingsPage() {
         "과거분사",
         "틀린횟수",
         "예문",
+        "예문뜻",
       ];
       const csvLines = [header.join(",")];
       for (const r of rows) {
         const examplesJoined = r.examples.map((e) => e.sentence).join(" / ");
+        const translationsJoined = r.examples
+          .map((e) => e.translation ?? "")
+          .join(" / ");
         const cells = [
           r.word,
           r.meaning,
@@ -131,6 +138,7 @@ export default function SettingsPage() {
           r.partizip2 ?? "",
           String(r.wrong_count),
           examplesJoined,
+          translationsJoined,
         ].map((c) => `"${c.replace(/"/g, '""')}"`);
         csvLines.push(cells.join(","));
       }
@@ -166,7 +174,7 @@ export default function SettingsPage() {
   function handleDownloadTemplate() {
     const ws = XLSX.utils.aoa_to_sheet([
       TEMPLATE_HEADERS,
-      ["Freiheit", "자유", "명사", "ˈfʁaɪhaɪt", "B1", "die", "Freiheiten", "", "", "Freiheit ist wichtig.", "", ""],
+      ["Freiheit", "자유", "명사", "ˈfʁaɪhaɪt", "B1", "die", "Freiheiten", "", "", "Freiheit ist wichtig.", "자유는 중요하다.", "", "", "", ""],
     ]);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "words");
@@ -240,16 +248,19 @@ export default function SettingsPage() {
           continue;
         }
 
-        const sentenceKeys = Object.keys(row).filter((k) =>
-          k.startsWith("예문")
+        // "예문"으로 시작하고 "뜻"으로 끝나지 않는 열이 독일어 예문, "<열 이름>뜻"이 그 예문의 뜻이다.
+        const sentenceKeys = Object.keys(row).filter(
+          (k) => k.startsWith("예문") && !k.endsWith("뜻")
         );
-        const sentences = sentenceKeys
-          .map((k) => String(row[k] ?? "").trim())
-          .filter(Boolean);
-        if (sentences.length > 0) {
-          await supabase.from("examples").insert(
-            sentences.map((sentence) => ({ word_id: inserted.id, sentence }))
-          );
+        const exampleRows = sentenceKeys
+          .map((k) => ({
+            word_id: inserted.id,
+            sentence: String(row[k] ?? "").trim(),
+            translation: String(row[`${k}뜻`] ?? "").trim() || null,
+          }))
+          .filter((r) => r.sentence);
+        if (exampleRows.length > 0) {
+          await supabase.from("examples").insert(exampleRows);
         }
         successCount++;
       }
@@ -297,9 +308,9 @@ export default function SettingsPage() {
           </button>
         </div>
         <p className="muted" style={{ margin: "6px 0 10px" }}>
-          템플릿의 열: 단어 · 뜻 · 품사 · 발음 · 난이도 · 성 · 복수형 · 조동사 · 과거분사 · 예문1 · 예문2 · 예문3
+          템플릿의 열: 단어 · 뜻 · 품사 · 발음 · 난이도 · 성 · 복수형 · 조동사 · 과거분사 · 예문1 · 예문1뜻 · 예문2 · 예문2뜻 · 예문3 · 예문3뜻
           (성은 der/die/das, 남성/여성/중성, 복수형으로만 쓰는 단어는 pl 또는 복수, 명사일 때만 적용됩니다. 조동사는 haben/sein, 과거분사와 함께 동사일 때만 적용됩니다. 성·복수형·조동사·과거분사·예문 칸은
-          비워둬도 되고, &ldquo;예문&rdquo;으로 시작하는 열은 몇 개든 추가해도
+          비워둬도 되고, &ldquo;예문N&rdquo; 열은 몇 개든 추가해도
           인식됩니다.)
         </p>
         <label style={{ marginBottom: 4 }}>엑셀 파일 선택 Excel-Datei auswählen</label>
