@@ -5,67 +5,21 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import type { Difficulty, Word } from "@/lib/types";
 import { isDue, nextSchedule } from "@/lib/srs";
-import { withArticle } from "@/lib/wordDisplay";
+import {
+  buildQuestion,
+  hasExamples,
+  isCorrect,
+  shuffle,
+  type ExampleMap,
+  type Question,
+} from "@/lib/quizGen";
 
 type Scope = "due" | "all" | "recent" | "difficulty";
-type Mode = "mc" | "type" | "flash" | "de" | "cloze";
 
 const UMLAUTS = ["ä", "ö", "ü", "ß"];
 
-// 입력값 비교용: 유니코드 정규화(NFC) + 공백 정리 + 대소문자 무시. ä↔a, ß↔ss는 같게 보지 않는다.
-function norm(v: string): string {
-  return v.normalize("NFC").trim().replace(/\s+/g, " ").toLowerCase();
-}
-
-function escapeRegExp(v: string): string {
-  return v.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-// 예문에서 단어(또는 복수형)가 독립된 단어로 쓰인 부분을 찾아 빈칸 문제를 만든다.
-function makeCloze(
-  sentence: string,
-  candidates: (string | null)[]
-): { text: string; answer: string } | null {
-  const src = sentence.normalize("NFC");
-  for (const c of candidates) {
-    if (!c) continue;
-    const re = new RegExp(
-      `(?<![\\p{L}])${escapeRegExp(c.normalize("NFC"))}(?![\\p{L}])`,
-      "iu"
-    );
-    const m = re.exec(src);
-    if (m) {
-      return {
-        text: src.slice(0, m.index) + "_____" + src.slice(m.index + m[0].length),
-        answer: m[0],
-      };
-    }
-  }
-  return null;
-}
-
 const DIFFICULTIES: Difficulty[] = ["A1", "A2", "B1", "B2", "C1", "C2"];
 const RECENT_COUNT = 20;
-
-function shuffle<T>(arr: T[]): T[] {
-  const a = [...arr];
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
-  }
-  return a;
-}
-
-function pickRandom<T>(arr: T[]): T | null {
-  return arr.length ? arr[Math.floor(Math.random() * arr.length)] : null;
-}
-
-type ClozeQ = {
-  text: string;
-  answer: string;
-  sentence: string;
-  translation: string | null;
-};
 
 export type Stage = "setup" | "playing" | "result";
 
@@ -79,14 +33,11 @@ type Props = {
 
 export default function QuizRunner({ lockedScope, onStageChange }: Props) {
   const [allWords, setAllWords] = useState<Word[]>([]);
-  const [examplesByWord, setExamplesByWord] = useState<
-    Record<number, { sentence: string; translation: string | null }[]>
-  >({});
+  const [examplesByWord, setExamplesByWord] = useState<ExampleMap>({});
   const [loading, setLoading] = useState(true);
 
   const [scope, setScope] = useState<Scope>(lockedScope ?? "due");
   const [difficulty, setDifficulty] = useState<Difficulty>("A1");
-  const [mode, setMode] = useState<Mode>("mc");
 
   const [stage, setStage] = useState<Stage>("setup");
   const [reloadKey, setReloadKey] = useState(0);
@@ -94,20 +45,13 @@ export default function QuizRunner({ lockedScope, onStageChange }: Props) {
   const [qIndex, setQIndex] = useState(0);
   const [answered, setAnswered] = useState<Answered[]>([]);
 
-  // 객관식 상태
-  const [mcOptions, setMcOptions] = useState<string[]>([]);
-  const [mcSelected, setMcSelected] = useState<string | null>(null);
-
-  // 뜻 입력 상태
-  const [typeInput, setTypeInput] = useState("");
-  const [typeChecked, setTypeChecked] = useState(false);
-  const [typeCorrect, setTypeCorrect] = useState(false);
-
-  // 플래시카드 상태
-  const [flipped, setFlipped] = useState(false);
-
-  // 예문 빈칸 상태 (입력 상태는 뜻 입력과 공유)
-  const [cloze, setCloze] = useState<ClozeQ | null>(null);
+  // 현재 문제와 응답 상태 (유형 공통)
+  const [question, setQuestion] = useState<Question | null>(null);
+  const [selected, setSelected] = useState<string | null>(null); // choice
+  const [typeInput, setTypeInput] = useState(""); // input
+  const [placed, setPlaced] = useState<number[]>([]); // reorder: tokens 인덱스
+  const [checked, setChecked] = useState(false);
+  const [correct, setCorrect] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const finalizedRef = useRef(false);
@@ -127,10 +71,7 @@ export default function QuizRunner({ lockedScope, onStageChange }: Props) {
         .select("word_id, sentence, translation");
       if (!active) return;
       if (!error) setAllWords(data ?? []);
-      const map: Record<
-        number,
-        { sentence: string; translation: string | null }[]
-      > = {};
+      const map: ExampleMap = {};
       (exData ?? []).forEach((e) => {
         (map[e.word_id] ??= []).push({
           sentence: e.sentence,
@@ -153,31 +94,6 @@ export default function QuizRunner({ lockedScope, onStageChange }: Props) {
     return allWords.filter((w) => w.difficulty === difficulty);
   }, [allWords, scope, difficulty]);
 
-  // 빈칸 퀴즈는 예문 속에 단어(또는 복수형)가 그대로 들어 있는 단어만 출제할 수 있다.
-  function clozeOptions(w: Word): ClozeQ[] {
-    const out: ClozeQ[] = [];
-    for (const ex of examplesByWord[w.id] ?? []) {
-      const c = makeCloze(ex.sentence, [w.word, w.plural]);
-      if (c) {
-        out.push({
-          ...c,
-          sentence: ex.sentence.normalize("NFC"),
-          translation: ex.translation,
-        });
-      }
-    }
-    return out;
-  }
-
-  const modePool = useMemo(
-    () =>
-      mode === "cloze"
-        ? scopedPool.filter((w) => clozeOptions(w).length > 0)
-        : scopedPool,
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [mode, scopedPool, examplesByWord]
-  );
-
   function changeStage(next: Stage) {
     setStage(next);
     // 설정 화면으로 돌아오면 방금 갱신된 복습 일정을 다시 불러온다.
@@ -185,73 +101,59 @@ export default function QuizRunner({ lockedScope, onStageChange }: Props) {
     onStageChange?.(next);
   }
 
-  function setupQuestion(word: Word, pool: Word[]) {
-    if (mode === "mc") {
-      const distractorPool = pool.filter(
-        (w) => w.id !== word.id && w.meaning !== word.meaning
-      );
-      const distractors = shuffle(distractorPool)
-        .slice(0, 3)
-        .map((w) => w.meaning);
-      const options = shuffle([word.meaning, ...distractors]);
-      setMcOptions(options);
-      setMcSelected(null);
-    } else if (mode === "type" || mode === "de" || mode === "cloze") {
-      if (mode === "cloze") {
-        const opts = clozeOptions(word);
-        setCloze(pickRandom(opts));
-      }
-      setTypeInput("");
-      setTypeChecked(false);
-      setTypeCorrect(false);
-    } else {
-      setFlipped(false);
-    }
+  // 단어 1개당 문제 1개를 새로 만들고 응답 상태를 초기화한다 (이벤트 핸들러에서만 호출).
+  function setupQuestion(word: Word) {
+    setQuestion(buildQuestion(word, allWords, examplesByWord));
+    setSelected(null);
+    setTypeInput("");
+    setPlaced([]);
+    setChecked(false);
+    setCorrect(false);
   }
 
   function startQuiz() {
-    const pool = modePool;
-    if (pool.length === 0) return;
-    const q = shuffle(pool);
+    if (scopedPool.length === 0) return;
+    const q = shuffle(scopedPool);
     setQueue(q);
     setQIndex(0);
     setAnswered([]);
     finalizedRef.current = false;
-    setupQuestion(q[0], allWords);
+    setupQuestion(q[0]);
     changeStage("playing");
   }
 
-  function goNext(current: Answered) {
-    const nextAnswered = [...answered, current];
+  function goNext() {
+    const nextAnswered = [...answered, { word: queue[qIndex], wrong: !correct }];
     setAnswered(nextAnswered);
     const nextIndex = qIndex + 1;
     if (nextIndex >= queue.length) {
       changeStage("result");
     } else {
       setQIndex(nextIndex);
-      setupQuestion(queue[nextIndex], allWords);
+      setupQuestion(queue[nextIndex]);
     }
   }
 
-  function handleMcSelect(opt: string) {
-    if (mcSelected) return;
-    setMcSelected(opt);
-    const word = queue[qIndex];
-    const wasWrong = opt !== word.meaning;
-    setTimeout(() => goNext({ word, wrong: wasWrong }), 700);
+  function check(given: string) {
+    if (!question || checked) return;
+    setChecked(true);
+    setCorrect(isCorrect(question, given));
   }
 
-  function handleTypeCheck() {
-    const word = queue[qIndex];
-    const expected =
-      mode === "de"
-        ? word.word
-        : mode === "cloze"
-          ? (cloze?.answer ?? "")
-          : word.meaning;
-    const ok = norm(typeInput) === norm(expected);
-    setTypeChecked(true);
-    setTypeCorrect(ok);
+  function handleChoice(opt: string) {
+    if (checked) return;
+    setSelected(opt);
+    check(opt);
+  }
+
+  function togglePlaced(i: number) {
+    if (checked || !question?.tokens) return;
+    setPlaced((p) => (p.includes(i) ? p.filter((x) => x !== i) : [...p, i]));
+  }
+
+  function checkReorder() {
+    if (!question?.tokens) return;
+    check(placed.map((i) => question.tokens![i]).join(" "));
   }
 
   function insertChar(ch: string) {
@@ -263,16 +165,6 @@ export default function QuizRunner({ lockedScope, onStageChange }: Props) {
       el?.focus();
       el?.setSelectionRange(start + 1, start + 1);
     });
-  }
-
-  function handleTypeNext() {
-    const word = queue[qIndex];
-    goNext({ word, wrong: !typeCorrect });
-  }
-
-  function handleFlashGrade(knew: boolean) {
-    const word = queue[qIndex];
-    goNext({ word, wrong: !knew });
   }
 
   // 결과 화면 진입 시 wrong_count / last_studied_at / 복습 일정 반영 (1회만).
@@ -312,116 +204,55 @@ export default function QuizRunner({ lockedScope, onStageChange }: Props) {
   }
 
   if (stage === "setup") {
+    const withEx = scopedPool.filter((w) => hasExamples(w, examplesByWord)).length;
+    const scopes: { key: Scope; ko: string; de: string }[] = [
+      { key: "due", ko: "복습 대상", de: "Heute fällig" },
+      { key: "all", ko: "전체 단어", de: "Alle Wörter" },
+      { key: "recent", ko: "최근 추가", de: "Zuletzt hinzugefügt" },
+      { key: "difficulty", ko: "난이도별", de: "Nach Niveau" },
+    ];
     return (
       <div>
         <div className="card">
           {!lockedScope && (
             <>
-<div className="section-title">1. 출제 범위 Umfang</div>
-          <div className="stepper">
-            <div
-              className={`step-opt ${scope === "due" ? "sel" : ""}`}
-              onClick={() => setScope("due")}
-            >
-              복습 대상
-              <small>Heute fällig</small>
-            </div>
-            <div
-              className={`step-opt ${scope === "all" ? "sel" : ""}`}
-              onClick={() => setScope("all")}
-            >
-              전체 단어
-              <small>Alle Wörter</small>
-            </div>
-            <div
-              className={`step-opt ${scope === "recent" ? "sel" : ""}`}
-              onClick={() => setScope("recent")}
-            >
-              최근 추가
-              <small>Zuletzt hinzugefügt</small>
-            </div>
-            <div
-              className={`step-opt ${scope === "difficulty" ? "sel" : ""}`}
-              onClick={() => setScope("difficulty")}
-            >
-              난이도별
-              <small>Nach Niveau</small>
-            </div>
-          </div>
-          {scope === "difficulty" && (
-            <div className="field" style={{ marginBottom: 12 }}>
-              <label>난이도 Niveau</label>
-              <select
-                value={difficulty}
-                onChange={(e) => setDifficulty(e.target.value as Difficulty)}
-              >
-                {DIFFICULTIES.map((d) => (
-                  <option key={d}>{d}</option>
+              <div className="section-title">출제 범위 Umfang</div>
+              <div className="stepper">
+                {scopes.map((s) => (
+                  <div
+                    key={s.key}
+                    className={`step-opt ${scope === s.key ? "sel" : ""}`}
+                    onClick={() => setScope(s.key)}
+                  >
+                    {s.ko}
+                    <small>{s.de}</small>
+                  </div>
                 ))}
-              </select>
-            </div>
+              </div>
+              {scope === "difficulty" && (
+                <div className="field" style={{ marginBottom: 12 }}>
+                  <label>난이도 Niveau</label>
+                  <select
+                    value={difficulty}
+                    onChange={(e) => setDifficulty(e.target.value as Difficulty)}
+                  >
+                    {DIFFICULTIES.map((d) => (
+                      <option key={d}>{d}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </>
           )}
-
-                      </>
-          )}
-
-          <div className="section-title">
-            {lockedScope ? "1." : "2."} 방식 Modus
-          </div>
-          <div className="stepper" style={{ flexWrap: "wrap" }}>
-            <div
-              className={`step-opt ${mode === "mc" ? "sel" : ""}`}
-              onClick={() => setMode("mc")}
-            >
-              객관식
-              <small>Multiple Choice</small>
-            </div>
-            <div
-              className={`step-opt ${mode === "type" ? "sel" : ""}`}
-              onClick={() => setMode("type")}
-            >
-              뜻 입력
-              <small>Bedeutung eingeben</small>
-            </div>
-            <div
-              className={`step-opt ${mode === "de" ? "sel" : ""}`}
-              onClick={() => setMode("de")}
-            >
-              독일어 입력
-              <small>Deutsch eingeben</small>
-            </div>
-            <div
-              className={`step-opt ${mode === "cloze" ? "sel" : ""}`}
-              onClick={() => setMode("cloze")}
-            >
-              예문 빈칸
-              <small>Lückentext</small>
-            </div>
-            <div
-              className={`step-opt ${mode === "flash" ? "sel" : ""}`}
-              onClick={() => setMode("flash")}
-            >
-              플래시카드
-              <small>Karteikarten</small>
-            </div>
-          </div>
 
           <p className="muted" style={{ marginBottom: 10 }}>
-            대상 단어 {modePool.length}개
-            {mode === "cloze" && modePool.length < scopedPool.length
-              ? ` (예문에 단어가 그대로 들어 있는 것만 · 전체 ${scopedPool.length}개 중)`
-              : ""}
-            {mode === "mc" && allWords.length < 4
-              ? " (객관식은 오답 보기를 위해 전체 단어가 최소 4개 필요합니다)"
-              : ""}
+            대상 단어 {scopedPool.length}개 / 예문 있는 단어 {withEx}개
           </p>
 
           <button
             className="btn"
             onClick={startQuiz}
-            disabled={
-              modePool.length === 0 || (mode === "mc" && allWords.length < 4)
-            }
+            disabled={scopedPool.length === 0}
           >
             퀴즈 시작 Quiz starten
           </button>
@@ -430,110 +261,68 @@ export default function QuizRunner({ lockedScope, onStageChange }: Props) {
     );
   }
 
-  if (stage === "playing") {
-    const word = queue[qIndex];
+  if (stage === "playing" && question) {
+    const q = question;
+    const status = checked
+      ? correct
+        ? { text: "정답! Richtig!", color: "var(--accent)" }
+        : { text: `오답 Falsch — 정답 Lösung: ${q.answer}`, color: "var(--danger)" }
+      : null;
+
     return (
       <div>
         <div className="card quiz-card">
           <div className="muted">
-            {qIndex + 1} / {queue.length}
+            {qIndex + 1} / {queue.length} · {q.label}
           </div>
 
-          {mode === "mc" && (
-            <>
-              <div className="quiz-word">{withArticle(word)}</div>
-              {mcOptions.map((opt) => {
-                let cls = "opt-btn";
-                if (mcSelected) {
-                  if (opt === word.meaning) cls += " correct";
-                  else if (opt === mcSelected) cls += " wrong";
-                }
-                return (
-                  <button
-                    key={opt}
-                    className={cls}
-                    onClick={() => handleMcSelect(opt)}
-                    disabled={!!mcSelected}
-                  >
-                    {opt}
-                  </button>
-                );
-              })}
-            </>
+          <div
+            className="quiz-word"
+            style={q.kind === "reorder" || q.kind.endsWith("Cloze") ? { fontSize: "1.3rem" } : undefined}
+          >
+            {q.prompt}
+          </div>
+          {q.sub && (
+            <p className="muted" style={{ marginBottom: 10 }}>
+              {q.sub}
+            </p>
           )}
 
-          {mode === "type" && (
-            <>
-              <div className="quiz-word">{withArticle(word)}</div>
-              <input
-                value={typeInput}
-                onChange={(e) => setTypeInput(e.target.value)}
-                placeholder="뜻을 입력하세요"
-                disabled={typeChecked}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !typeChecked) handleTypeCheck();
-                }}
-              />
-              {typeChecked && (
-                <p
-                  className="muted"
-                  style={{
-                    marginTop: 10,
-                    color: typeCorrect ? "var(--accent)" : "var(--danger)",
-                  }}
+          {q.format === "choice" &&
+            q.options?.map((opt) => {
+              let cls = "opt-btn";
+              if (checked) {
+                if (opt === q.answer) cls += " correct";
+                else if (opt === selected) cls += " wrong";
+              }
+              return (
+                <button
+                  key={opt}
+                  className={cls}
+                  onClick={() => handleChoice(opt)}
+                  disabled={checked}
                 >
-                  {typeCorrect ? "정답!" : `오답 — 정답: ${word.meaning}`}
-                </p>
-              )}
-              <div style={{ marginTop: 14 }}>
-                {!typeChecked ? (
-                  <button className="btn" onClick={handleTypeCheck}>
-                    확인 Prüfen
-                  </button>
-                ) : (
-                  <button className="btn" onClick={handleTypeNext}>
-                    다음 Weiter
-                  </button>
-                )}
-              </div>
-            </>
-          )}
+                  {opt}
+                </button>
+              );
+            })}
 
-          {(mode === "de" || mode === "cloze") && (
+          {q.format === "input" && (
             <>
-              {mode === "de" ? (
-                <>
-                  <div className="quiz-word">{word.meaning}</div>
-                  <p className="muted">
-                    독일어로 입력하세요 (관사 제외) Auf Deutsch, ohne Artikel
-                  </p>
-                </>
-              ) : (
-                <>
-                  <div className="quiz-word" style={{ fontSize: "1.3rem" }}>
-                    {cloze?.text}
-                  </div>
-                  <p className="muted">
-                    {cloze?.translation
-                      ? `예문 뜻 Übersetzung: ${cloze.translation}`
-                      : `힌트 Hinweis: ${word.meaning}`}
-                  </p>
-                </>
-              )}
               <input
                 ref={inputRef}
                 value={typeInput}
                 onChange={(e) => setTypeInput(e.target.value)}
                 placeholder="Antwort"
-                disabled={typeChecked}
+                disabled={checked}
                 autoCapitalize="none"
                 autoCorrect="off"
                 spellCheck={false}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter" && !typeChecked) handleTypeCheck();
+                  if (e.key === "Enter" && !checked) check(typeInput);
                 }}
               />
-              {!typeChecked && (
+              {!checked && q.umlaut && (
                 <div className="row" style={{ marginTop: 8, gap: 6 }}>
                   {UMLAUTS.map((ch) => (
                     <button
@@ -549,71 +338,73 @@ export default function QuizRunner({ lockedScope, onStageChange }: Props) {
                   ))}
                 </div>
               )}
-              {typeChecked && (
-                <p
-                  className="muted"
-                  style={{
-                    marginTop: 10,
-                    color: typeCorrect ? "var(--accent)" : "var(--danger)",
-                  }}
-                >
-                  {typeCorrect ? "정답!" : "오답"} — {" "}
-                  {mode === "de" ? withArticle(word) : cloze?.answer}
-                </p>
-              )}
-              {typeChecked && mode === "cloze" && cloze && (
-                <p className="muted" style={{ marginTop: 6 }}>
-                  {cloze.sentence}
-                  {cloze.translation ? ` — ${cloze.translation}` : ""}
-                  {` (${word.meaning})`}
-                </p>
-              )}
-              <div style={{ marginTop: 14 }}>
-                {!typeChecked ? (
-                  <button className="btn" onClick={handleTypeCheck}>
-                    확인 Prüfen
-                  </button>
-                ) : (
-                  <button className="btn" onClick={handleTypeNext}>
-                    다음 Weiter
-                  </button>
+            </>
+          )}
+
+          {q.format === "reorder" && q.tokens && (
+            <>
+              <div className="chip-area">
+                {placed.length === 0 && (
+                  <span className="muted">여기에 순서대로 놓기 Hier ablegen</span>
                 )}
+                {placed.map((i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    className="chip placed"
+                    disabled={checked}
+                    onClick={() => togglePlaced(i)}
+                  >
+                    {q.tokens![i]}
+                  </button>
+                ))}
+              </div>
+              <div className="chip-bank">
+                {q.tokens.map((t, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    className="chip"
+                    disabled={checked || placed.includes(i)}
+                    onClick={() => togglePlaced(i)}
+                  >
+                    {t}
+                  </button>
+                ))}
               </div>
             </>
           )}
 
-          {mode === "flash" && (
-            <>
-              <div
-                className="flash-card"
-                onClick={() => setFlipped((f) => !f)}
-              >
-                {!flipped ? (
-                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
-                    <span>{withArticle(word)}</span>
-                  </div>
-                ) : (
-                  word.meaning
-                )}
-              </div>
-              <p className="muted" style={{ marginTop: 8 }}>
-                카드를 눌러 뒤집어보세요 Zum Umdrehen tippen
-              </p>
-              {flipped && (
-                <div className="row" style={{ marginTop: 14 }}>
-                  <button
-                    className="btn danger"
-                    onClick={() => handleFlashGrade(false)}
-                  >
-                    몰랐어요 Wusste ich nicht
-                  </button>
-                  <button className="btn" onClick={() => handleFlashGrade(true)}>
-                    알았어요 Wusste ich
-                  </button>
-                </div>
-              )}
-            </>
+          {status && (
+            <p className="muted" style={{ marginTop: 10, color: status.color }}>
+              {status.text}
+            </p>
           )}
+          {checked && (
+            <p className="muted" style={{ marginTop: 6, whiteSpace: "pre-line" }}>
+              {q.reveal}
+            </p>
+          )}
+
+          <div style={{ marginTop: 14 }}>
+            {checked ? (
+              <button className="btn" onClick={goNext}>
+                다음 Weiter
+              </button>
+            ) : q.format === "input" ? (
+              <button className="btn" onClick={() => check(typeInput)}>
+                확인 Prüfen
+              </button>
+            ) : q.format === "reorder" ? (
+              <button
+                className="btn"
+                onClick={checkReorder}
+                disabled={placed.length !== q.tokens?.length}
+              >
+                확인 Prüfen
+              </button>
+            ) : null}
+          </div>
         </div>
       </div>
     );
