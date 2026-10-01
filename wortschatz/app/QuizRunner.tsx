@@ -13,6 +13,7 @@ import {
   type ExampleMap,
   type Question,
 } from "@/lib/quizGen";
+import { withArticle } from "@/lib/wordDisplay";
 
 type Scope = "due" | "all" | "recent" | "difficulty";
 
@@ -44,6 +45,8 @@ export default function QuizRunner({ lockedScope, onStageChange }: Props) {
   const [queue, setQueue] = useState<Word[]>([]);
   const [qIndex, setQIndex] = useState(0);
   const [answered, setAnswered] = useState<Answered[]>([]);
+  // 틀린 문제 다시 풀기(연습) 라운드 여부 — 복습 일정/통계에는 반영하지 않는다.
+  const [retry, setRetry] = useState(false);
 
   // 현재 문제와 응답 상태 (유형 공통)
   const [question, setQuestion] = useState<Question | null>(null);
@@ -117,7 +120,22 @@ export default function QuizRunner({ lockedScope, onStageChange }: Props) {
     setQueue(q);
     setQIndex(0);
     setAnswered([]);
+    setRetry(false);
     finalizedRef.current = false;
+    setupQuestion(q[0]);
+    changeStage("playing");
+  }
+
+  // 방금 틀린 단어만 다시 출제한다. 첫 라운드에서 이미 일정이 반영됐으므로 DB에는 쓰지 않는다.
+  function startRetry() {
+    const wrongWords = answered.filter((a) => a.wrong).map((a) => a.word);
+    if (wrongWords.length === 0) return;
+    const q = shuffle(wrongWords);
+    setQueue(q);
+    setQIndex(0);
+    setAnswered([]);
+    setRetry(true);
+    finalizedRef.current = true;
     setupQuestion(q[0]);
     changeStage("playing");
   }
@@ -427,24 +445,52 @@ export default function QuizRunner({ lockedScope, onStageChange }: Props) {
           <div className="result-fill" style={{ width: `${rate}%` }} />
         </div>
         {wrongCount > 0 ? (
-          <p className="muted" style={{ marginTop: 8 }}>
-            틀린 {wrongCount}개 단어는 1일 단계로 돌아가 내일 다시 복습됩니다
-            {!lockedScope && (
-              <>
-                {" "}·{" "}
-                <Link href="/review" style={{ color: "var(--accent)" }}>
-                  복습 일정 보기 Zum Zeitplan
-                </Link>
-              </>
+          <>
+            {retry ? (
+              <p className="muted" style={{ marginTop: 8 }}>
+                연습 라운드라서 복습 일정에는 반영되지 않습니다 Übungsrunde — Zeitplan bleibt unverändert
+              </p>
+            ) : (
+              <p className="muted" style={{ marginTop: 8 }}>
+                틀린 {wrongCount}개 단어는 1일 단계로 돌아가 내일 다시 복습됩니다
+                {!lockedScope && (
+                  <>
+                    {" "}·{" "}
+                    <Link href="/review" style={{ color: "var(--accent)" }}>
+                      복습 일정 보기 Zum Zeitplan
+                    </Link>
+                  </>
+                )}
+              </p>
             )}
-          </p>
+            <div className="section-title" style={{ marginTop: 14 }}>
+              틀린 단어 Fehlerliste
+            </div>
+            <ul className="muted" style={{ margin: "0 0 4px", paddingLeft: 18 }}>
+              {answered
+                .filter((a) => a.wrong)
+                .map((a) => (
+                  <li key={a.word.id}>
+                    {withArticle(a.word)} — {a.word.meaning}
+                  </li>
+                ))}
+            </ul>
+          </>
         ) : (
           <p className="muted" style={{ marginTop: 8 }}>
             전부 맞혔습니다 🎉
           </p>
         )}
         <div className="row" style={{ marginTop: 14 }}>
-          <button className="btn" onClick={() => changeStage("setup")}>
+          {wrongCount > 0 && (
+            <button className="btn" onClick={startRetry}>
+              틀린 {wrongCount}개 다시 풀기 Fehler wiederholen
+            </button>
+          )}
+          <button
+            className={wrongCount > 0 ? "btn ghost" : "btn"}
+            onClick={() => changeStage("setup")}
+          >
             다시 설정하기 Neu einstellen
           </button>
         </div>
