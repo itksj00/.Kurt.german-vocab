@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import NavBar from "./NavBar";
 import ThemeToggle from "./ThemeToggle";
+import SkylineBackground from "./SkylineBackground";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -37,6 +38,7 @@ export default function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
       <body>
+        <SkylineBackground />
         <header className="site-header">
           <div className="logo">
             <b>나만의 독일어 단어장</b>

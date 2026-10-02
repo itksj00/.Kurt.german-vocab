@@ -734,3 +734,39 @@ textarea:focus {
 .chip.placed:disabled {
   opacity: 1;
 }
+
+.skyline-bg {
+  position: fixed;
+  left: 0;
+  bottom: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.9;
+}
+
+@media (max-width: 720px) {
+  .skyline-bg {
+    opacity: 0.45;
+  }
+}
+
+main.site-main {
+  position: relative;
+  z-index: 1;
+}
+
+.sk-blink {
+  animation: sk-blink 1.6s steps(2, start) infinite;
+}
+
+@keyframes sk-blink {
+  50% {
+    opacity: 0.15;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sk-blink {
+    animation: none;
+  }
+}

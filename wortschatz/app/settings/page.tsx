@@ -266,6 +266,7 @@ export default function SettingsPage() {
         successCount++;
       }
 
+      window.dispatchEvent(new Event("wortschatz:words-changed"));
       setMessage(
         `가져오기 완료: 성공 ${successCount}건, 실패 ${failCount}건`
       );
@@ -292,6 +293,7 @@ export default function SettingsPage() {
       const { error } = await supabase.from("words").delete().gte("id", 0);
       if (error) throw new Error(error.message);
       setConfirmText("");
+      window.dispatchEvent(new Event("wortschatz:words-changed"));
       setMessage(`전체 삭제 완료 Alles gelöscht: 단어 ${count ?? 0}개와 예문을 삭제했습니다.`);
     } catch (err) {
       setMessage(
