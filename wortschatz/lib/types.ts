@@ -21,6 +21,8 @@ export type Word = {
   next_review_at: string | null;
   last_studied_at: string | null;
   created_at: string;
+  sorted_at: string | null; // null = 아직 분류하지 않은 새 단어
+  sort_result: "known" | "unknown" | null;
 };
 
 export type Example = {

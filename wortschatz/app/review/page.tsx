@@ -37,6 +37,7 @@ export default function ReviewPage() {
       const { data, error } = await supabase
         .from("words")
         .select("id, word, meaning, gender, review_stage, next_review_at")
+        .not("sorted_at", "is", null)
         .order("next_review_at", { ascending: true });
       if (!active) return;
       if (error) setErrorMsg(error.message);

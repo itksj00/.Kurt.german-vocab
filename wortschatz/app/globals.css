@@ -770,3 +770,63 @@ main.site-main {
     animation: none;
   }
 }
+
+.nav-badge {
+  display: inline-block;
+  min-width: 18px;
+  margin-left: 5px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--danger);
+  color: #fff;
+  font-size: 0.7rem;
+  line-height: 18px;
+  text-align: center;
+}
+
+.sort-stage {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 250px;
+  overflow: hidden;
+}
+
+.sort-card {
+  position: relative;
+  width: 100%;
+  max-width: 320px;
+  height: 200px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+  cursor: grab;
+  touch-action: pan-y;
+  user-select: none;
+}
+
+.sort-badge {
+  position: absolute;
+  top: 10px;
+  padding: 2px 8px;
+  border: 2px solid currentColor;
+  border-radius: 6px;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.sort-badge.left {
+  right: 10px;
+  color: var(--danger);
+}
+
+.sort-badge.right {
+  left: 10px;
+  color: var(--accent-strong);
+}

@@ -65,7 +65,7 @@ export default function QuizRunner({ lockedScope, onStageChange }: Props) {
       const { data, error } = await supabase
         .from("words")
         .select(
-          "id, word, meaning, part_of_speech, pronunciation, difficulty, gender, plural, perfekt_aux, partizip2, wrong_count, review_stage, next_review_at, last_studied_at, created_at"
+          "id, word, meaning, part_of_speech, pronunciation, difficulty, gender, plural, perfekt_aux, partizip2, wrong_count, review_stage, next_review_at, last_studied_at, created_at, sorted_at, sort_result"
         )
         .order("created_at", { ascending: false });
       if (!active) return;
@@ -90,11 +90,18 @@ export default function QuizRunner({ lockedScope, onStageChange }: Props) {
     };
   }, [reloadKey]);
 
+  // 분류(알아요/몰라요)를 마치지 않은 새 단어는 퀴즈에서 제외하고, 하나라도 남아 있으면 시작할 수 없다.
+  const pendingCount = useMemo(
+    () => allWords.filter((w) => w.sorted_at === null).length,
+    [allWords]
+  );
+
   const scopedPool = useMemo(() => {
-    if (scope === "due") return allWords.filter((w) => isDue(w.next_review_at));
-    if (scope === "all") return allWords;
-    if (scope === "recent") return allWords.slice(0, RECENT_COUNT);
-    return allWords.filter((w) => w.difficulty === difficulty);
+    const sorted = allWords.filter((w) => w.sorted_at !== null);
+    if (scope === "due") return sorted.filter((w) => isDue(w.next_review_at));
+    if (scope === "all") return sorted;
+    if (scope === "recent") return sorted.slice(0, RECENT_COUNT);
+    return sorted.filter((w) => w.difficulty === difficulty);
   }, [allWords, scope, difficulty]);
 
   function changeStage(next: Stage) {
@@ -115,7 +122,7 @@ export default function QuizRunner({ lockedScope, onStageChange }: Props) {
   }
 
   function startQuiz() {
-    if (scopedPool.length === 0) return;
+    if (scopedPool.length === 0 || pendingCount > 0) return;
     const q = shuffle(scopedPool);
     setQueue(q);
     setQIndex(0);
@@ -267,10 +274,19 @@ export default function QuizRunner({ lockedScope, onStageChange }: Props) {
             대상 단어 {scopedPool.length}개 / 예문 있는 단어 {withEx}개
           </p>
 
+          {pendingCount > 0 && (
+            <p style={{ marginBottom: 10, color: "var(--danger)" }}>
+              분류하지 않은 새 단어가 {pendingCount}개 있습니다. 먼저 분류해야 퀴즈를 시작할 수 있어요.{" "}
+              <Link href="/sort" style={{ color: "var(--accent)" }}>
+                분류하기 Sortieren
+              </Link>
+            </p>
+          )}
+
           <button
             className="btn"
             onClick={startQuiz}
-            disabled={scopedPool.length === 0}
+            disabled={scopedPool.length === 0 || pendingCount > 0}
           >
             퀴즈 시작 Quiz starten
           </button>
