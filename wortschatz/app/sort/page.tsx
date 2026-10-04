@@ -3,8 +3,10 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
-import type { Word } from "@/lib/types";
+import type { Pattern, Word } from "@/lib/types";
 import { posLabel, withArticle } from "@/lib/wordDisplay";
+import { patternText } from "@/lib/patterns";
+import ModeTabs, { type Mode } from "../ModeTabs";
 import {
   SWIPE_THRESHOLD,
   sortPatch,
@@ -13,10 +15,22 @@ import {
   type SortResult,
 } from "@/lib/sort";
 
-type Done = { word: Word; result: SortResult };
+type Item = Word | Pattern;
+type Done = { word: Item; result: SortResult };
+
+const WORD_COLS: string =
+  "id, word, meaning, part_of_speech, pronunciation, difficulty, gender, plural, perfekt_aux, partizip2, wrong_count, review_stage, next_review_at, last_studied_at, created_at, sorted_at, sort_result";
+const PATTERN_COLS: string =
+  "id, verb, reflexive, preposition, pattern_case, meaning, wrong_count, review_stage, next_review_at, last_studied_at, created_at, sorted_at, sort_result";
 
 export default function SortPage() {
-  const [queue, setQueue] = useState<Word[]>([]);
+  // /sort#pattern 으로 들어오면 패턴 탭으로 시작한다. (로딩 화면에는 탭이 없어 서버 렌더와 어긋나지 않는다)
+  const [mode, setMode] = useState<Mode>(() =>
+    typeof window !== "undefined" && window.location.hash === "#pattern" ? "pattern" : "word"
+  );
+  const table = mode === "pattern" ? "patterns" : "words";
+  const [otherCount, setOtherCount] = useState(0);
+  const [queue, setQueue] = useState<Item[]>([]);
   const [history, setHistory] = useState<Done[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -31,23 +45,37 @@ export default function SortPage() {
   useEffect(() => {
     let active = true;
     async function load() {
-      const { data, error } = await supabase
-        .from("words")
-        .select(
-          "id, word, meaning, part_of_speech, pronunciation, difficulty, gender, plural, perfekt_aux, partizip2, wrong_count, review_stage, next_review_at, last_studied_at, created_at, sorted_at, sort_result"
-        )
-        .is("sorted_at", null)
-        .order("created_at", { ascending: true });
+      const otherTable = table === "words" ? "patterns" : "words";
+      const [res, other] = await Promise.all([
+        supabase
+          .from(table)
+          .select(table === "words" ? WORD_COLS : PATTERN_COLS)
+          .is("sorted_at", null)
+          .order("created_at", { ascending: true }),
+        supabase.from(otherTable).select("id", { count: "exact", head: true }).is("sorted_at", null),
+      ]);
       if (!active) return;
-      if (error) setError(error.message);
-      else setQueue(data ?? []);
+      if (res.error) setError(res.error.message);
+      else setQueue((res.data ?? []) as unknown as Item[]);
+      setOtherCount(other.error ? 0 : (other.count ?? 0));
       setLoading(false);
     }
     load();
     return () => {
       active = false;
     };
-  }, []);
+  }, [table]);
+
+  function changeMode(next: Mode) {
+    if (next === mode || leaving) return;
+    setLoading(true);
+    setError(null);
+    setQueue([]);
+    setHistory([]);
+    setFlipped(false);
+    setDragX(0);
+    setMode(next);
+  }
 
   function notify() {
     window.dispatchEvent(new Event("wortschatz:sort-changed"));
@@ -66,7 +94,7 @@ export default function SortPage() {
       setDragX(0);
       setLeaving(null);
       const { error } = await supabase
-        .from("words")
+        .from(table)
         .update(sortPatch(result))
         .eq("id", w.id);
       if (error) {
@@ -87,7 +115,7 @@ export default function SortPage() {
     setQueue((q) => [last.word, ...q]);
     setFlipped(false);
     const { error } = await supabase
-      .from("words")
+      .from(table)
       .update(undoPatch())
       .eq("id", last.word.id);
     if (error) {
@@ -163,9 +191,18 @@ export default function SortPage() {
       <div className="page-hero">
         <h1>새 단어 분류 Sortieren</h1>
         <p className="muted">
-          뜻을 아는 단어는 오른쪽, 모르는 단어는 왼쪽으로 밀어 주세요. 모두 분류해야 퀴즈를 시작할 수 있습니다.
+          뜻을 아는 {mode === "pattern" ? "패턴" : "단어"}은 오른쪽, 모르는 {mode === "pattern" ? "패턴" : "단어"}은 왼쪽으로 밀어 주세요. 모두 분류해야 퀴즈를 시작할 수 있습니다.
         </p>
       </div>
+
+      <ModeTabs
+        mode={mode}
+        onChange={changeMode}
+        counts={{
+          word: mode === "word" ? queue.length : otherCount,
+          pattern: mode === "pattern" ? queue.length : otherCount,
+        }}
+      />
 
       {error && (
         <p className="muted" style={{ color: "var(--danger)", marginBottom: 10 }}>
@@ -176,7 +213,7 @@ export default function SortPage() {
       {w ? (
         <div className="card">
           <p className="muted" style={{ marginBottom: 8 }}>
-            남은 단어 {queue.length}개 Noch {queue.length}
+            남은 {mode === "pattern" ? "패턴" : "단어"} {queue.length}개 Noch {queue.length}
           </p>
 
           <div className="sort-stage">
@@ -206,10 +243,10 @@ export default function SortPage() {
                 알아요 Weiß ich
               </span>
               <div className="muted" style={{ fontSize: "0.8rem" }}>
-                {w.part_of_speech ? posLabel(w.part_of_speech) : ""}
+                {"verb" in w ? "패턴 Muster" : w.part_of_speech ? posLabel(w.part_of_speech) : ""}
               </div>
               <div className="quiz-word" style={{ margin: "6px 0" }}>
-                {withArticle(w)}
+                {"verb" in w ? patternText(w) : withArticle(w)}
               </div>
               {flipped ? (
                 <div style={{ fontSize: "1.05rem" }}>{w.meaning}</div>
@@ -244,14 +281,14 @@ export default function SortPage() {
           <p style={{ marginBottom: 12 }}>
             {history.length > 0
               ? `분류를 마쳤습니다. 방금 ${history.length}개를 분류했어요 🎉`
-              : "분류할 새 단어가 없습니다. Keine neuen Wörter."}
+              : `분류할 새 ${mode === "pattern" ? "패턴" : "단어"}이 없습니다. Nichts zu sortieren.`}
           </p>
           <div className="row" style={{ gap: 8 }}>
             <Link href="/quiz" className="btn">
               퀴즈 시작 Quiz
             </Link>
-            <Link href="/words/add" className="btn ghost">
-              단어 추가 Hinzufügen
+            <Link href={mode === "pattern" ? "/patterns/add" : "/words/add"} className="btn ghost">
+              {mode === "pattern" ? "패턴" : "단어"} 추가 Hinzufügen
             </Link>
           </div>
           {history.length > 0 && (

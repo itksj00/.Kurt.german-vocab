@@ -33,7 +33,7 @@ type Answered = { word: Item; wrong: boolean };
 const WORD_COLS: string =
   "id, word, meaning, part_of_speech, pronunciation, difficulty, gender, plural, perfekt_aux, partizip2, wrong_count, review_stage, next_review_at, last_studied_at, created_at, sorted_at, sort_result";
 const PATTERN_COLS: string =
-  "id, verb, reflexive, preposition, pattern_case, meaning, wrong_count, review_stage, next_review_at, last_studied_at, created_at";
+  "id, verb, reflexive, preposition, pattern_case, meaning, wrong_count, review_stage, next_review_at, last_studied_at, created_at, sorted_at, sort_result";
 
 function itemLabel(i: Item): string {
   return "verb" in i ? patternText(i) : withArticle(i);
@@ -107,19 +107,19 @@ export default function QuizRunner({ lockedScope, onStageChange, mode = "word" }
     };
   }, [reloadKey, isPattern, table]);
 
-  // 분류(알아요/몰라요)를 마치지 않은 새 단어는 퀴즈에서 제외하고, 하나라도 남아 있으면 시작할 수 없다. (패턴은 분류 없음)
+  // 분류(알아요/몰라요)를 마치지 않은 새 단어/패턴은 퀴즈에서 제외하고, 하나라도 남아 있으면 시작할 수 없다.
   const pendingCount = useMemo(
-    () => (isPattern ? 0 : allWords.filter((w) => (w as Word).sorted_at === null).length),
-    [allWords, isPattern]
+    () => allWords.filter((w) => w.sorted_at === null).length,
+    [allWords]
   );
 
   const scopedPool = useMemo(() => {
-    const sorted = isPattern ? allWords : allWords.filter((w) => (w as Word).sorted_at !== null);
+    const sorted = allWords.filter((w) => w.sorted_at !== null);
     if (scope === "due") return sorted.filter((w) => isDue(w.next_review_at));
     if (scope === "all") return sorted;
     if (scope === "recent") return sorted.slice(0, RECENT_COUNT);
     return sorted.filter((w) => (w as Word).difficulty === difficulty);
-  }, [allWords, scope, difficulty, isPattern]);
+  }, [allWords, scope, difficulty]);
 
   function changeStage(next: Stage) {
     setStage(next);
@@ -299,8 +299,8 @@ export default function QuizRunner({ lockedScope, onStageChange, mode = "word" }
 
           {pendingCount > 0 && (
             <p style={{ marginBottom: 10, color: "var(--danger)" }}>
-              분류하지 않은 새 단어가 {pendingCount}개 있습니다. 먼저 분류해야 퀴즈를 시작할 수 있어요.{" "}
-              <Link href="/sort" style={{ color: "var(--accent)" }}>
+              분류하지 않은 새 {noun} {pendingCount}개가 있습니다. 먼저 분류해야 퀴즈를 시작할 수 있어요.{" "}
+              <Link href={`/sort#${mode}`} style={{ color: "var(--accent)" }}>
                 분류하기 Sortieren
               </Link>
             </p>

@@ -5,6 +5,8 @@ import * as XLSX from "xlsx";
 import { supabase } from "@/lib/supabaseClient";
 import type { Difficulty, Gender, PerfektAux } from "@/lib/types";
 import PatternSettings from "./PatternSettings";
+import ModeTabs, { type Mode } from "../ModeTabs";
+import { readAllRows } from "@/lib/xlsxRows";
 
 const TEMPLATE_HEADERS = [
   "단어",
@@ -70,6 +72,7 @@ type FullWord = {
 };
 
 export default function SettingsPage() {
+  const [mode, setMode] = useState<Mode>("word");
   const [busy, setBusy] = useState<string | null>(null);
   const [confirmText, setConfirmText] = useState("");
   const [message, setMessage] = useState<string | null>(null);
@@ -196,10 +199,8 @@ export default function SettingsPage() {
     try {
       const buf = await file.arrayBuffer();
       const wb = XLSX.read(buf, { type: "array" });
-      const sheet = wb.Sheets[wb.SheetNames[0]];
-      const rows = XLSX.utils.sheet_to_json<Record<string, string>>(sheet, {
-        defval: "",
-      });
+      // 모든 시트의 데이터 행을 읽는다 (시트 범위 정보가 잘못된 파일도 처리)
+      const rows = readAllRows(wb).map((r) => r.data as Record<string, string>);
 
       let successCount = 0;
       let failCount = 0;
@@ -309,80 +310,84 @@ export default function SettingsPage() {
 
   return (
     <main className="site-main narrow">
-      <div className="card">
-        <div className="section-title">데이터 내보내기 Export</div>
-        <div className="row">
-          <button
-            className="btn ghost"
-            onClick={handleExportCSV}
-            disabled={busy === "csv"}
-          >
-            {busy === "csv" ? "내보내는 중... Exportiert..." : "CSV로 내보내기 Als CSV exportieren"}
-          </button>
-          <button
-            className="btn ghost"
-            onClick={handleExportJSON}
-            disabled={busy === "json"}
-          >
-            {busy === "json" ? "내보내는 중... Exportiert..." : "JSON으로 내보내기 Als JSON exportieren"}
-          </button>
-        </div>
+      <ModeTabs mode={mode} onChange={setMode} />
 
-        <div className="section-title">
-          엑셀로 여러 단어 한번에 추가 Excel Import
-        </div>
-        <div className="row">
-          <button className="btn ghost" onClick={handleDownloadTemplate}>
-            📄 템플릿(xlsx) 다운로드 Vorlage herunterladen
-          </button>
-        </div>
-        <p className="muted" style={{ margin: "6px 0 10px" }}>
-          템플릿의 열: 단어 · 뜻 · 품사 · 발음 · 난이도 · 성 · 복수형 · 조동사 · 과거분사 · 예문1 · 예문1뜻 · 예문2 · 예문2뜻 · 예문3 · 예문3뜻
-          (성은 der/die/das, 남성/여성/중성, 복수형으로만 쓰는 단어는 pl 또는 복수, 명사일 때만 적용됩니다. 조동사는 haben/sein, 과거분사와 함께 동사일 때만 적용됩니다. 성·복수형·조동사·과거분사·예문 칸은
-          비워둬도 되고, &ldquo;예문N&rdquo; 열은 몇 개든 추가해도
-          인식됩니다.)
-        </p>
-        <label style={{ marginBottom: 4 }}>엑셀 파일 선택 Excel-Datei auswählen</label>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept=".xlsx,.xls"
-          onChange={handleImportFile}
-          disabled={busy === "import"}
-          style={{ marginBottom: 4 }}
-        />
-        {busy === "import" && (
-          <p className="muted">가져오는 중입니다. 단어 수에 따라 시간이 걸릴 수 있어요...</p>
-        )}
+      {mode === "pattern" ? (
+        <PatternSettings />
+      ) : (
+        <div className="card">
+          <div className="section-title" style={{ marginTop: 0 }}>
+            단어 내보내기 Wörter exportieren
+          </div>
+          <div className="row">
+            <button
+              className="btn ghost"
+              onClick={handleExportCSV}
+              disabled={busy === "csv"}
+            >
+              {busy === "csv" ? "내보내는 중... Exportiert..." : "CSV로 내보내기 Als CSV exportieren"}
+            </button>
+            <button
+              className="btn ghost"
+              onClick={handleExportJSON}
+              disabled={busy === "json"}
+            >
+              {busy === "json" ? "내보내는 중... Exportiert..." : "JSON으로 내보내기 Als JSON exportieren"}
+            </button>
+          </div>
 
-        {message && <p className="muted" style={{ marginTop: 10 }}>{message}</p>}
-      </div>
+          <div className="section-title">
+            엑셀로 여러 단어 한번에 추가 Excel Import
+          </div>
+          <div className="row">
+            <button className="btn ghost" onClick={handleDownloadTemplate}>
+              📄 템플릿(xlsx) 다운로드 Vorlage herunterladen
+            </button>
+          </div>
+          <p className="muted" style={{ margin: "6px 0 10px" }}>
+            템플릿의 열: 단어 · 뜻 · 품사 · 발음 · 난이도 · 성 · 복수형 · 조동사 · 과거분사 · 예문1 · 예문1뜻 · 예문2 · 예문2뜻 · 예문3 · 예문3뜻
+            (성은 der/die/das, 남성/여성/중성, 복수형으로만 쓰는 단어는 pl 또는 복수, 명사일 때만 적용됩니다. 조동사는 haben/sein, 과거분사와 함께 동사일 때만 적용됩니다. 성·복수형·조동사·과거분사·예문 칸은
+            비워둬도 되고, &ldquo;예문N&rdquo; 열은 몇 개든 추가해도
+            인식됩니다.)
+          </p>
+          <label style={{ marginBottom: 4 }}>엑셀 파일 선택 Excel-Datei auswählen</label>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".xlsx,.xls"
+            onChange={handleImportFile}
+            disabled={busy === "import"}
+            style={{ marginBottom: 4 }}
+          />
+          {busy === "import" && (
+            <p className="muted">가져오는 중입니다. 단어 수에 따라 시간이 걸릴 수 있어요...</p>
+          )}
 
-      <PatternSettings />
+          <div className="section-title">전체 삭제 Alle Wörter löschen</div>
+          <p className="muted" style={{ marginBottom: 10 }}>
+            등록한 모든 단어와 예문, 복습 기록이 삭제되며 되돌릴 수 없습니다. 먼저 위의
+            JSON 내보내기로 백업하세요. 계속하려면 아래 칸에 &ldquo;삭제&rdquo;를 입력하세요.
+          </p>
+          <input
+            value={confirmText}
+            onChange={(e) => setConfirmText(e.target.value)}
+            placeholder="삭제"
+            disabled={busy === "delete"}
+            style={{ marginBottom: 10 }}
+          />
+          <div className="row">
+            <button
+              className="btn danger"
+              onClick={handleDeleteAll}
+              disabled={busy === "delete" || confirmText.trim() !== "삭제"}
+            >
+              {busy === "delete" ? "삭제 중... Löscht..." : "모든 단어 삭제 Alle Wörter löschen"}
+            </button>
+          </div>
 
-      <div className="card">
-        <div className="section-title">전체 삭제 Alles löschen</div>
-        <p className="muted" style={{ marginBottom: 10 }}>
-          등록한 모든 단어와 예문, 복습 기록이 삭제되며 되돌릴 수 없습니다. 먼저 위의
-          JSON 내보내기로 백업하세요. 계속하려면 아래 칸에 &ldquo;삭제&rdquo;를 입력하세요.
-        </p>
-        <input
-          value={confirmText}
-          onChange={(e) => setConfirmText(e.target.value)}
-          placeholder="삭제"
-          disabled={busy === "delete"}
-          style={{ marginBottom: 10 }}
-        />
-        <div className="row">
-          <button
-            className="btn danger"
-            onClick={handleDeleteAll}
-            disabled={busy === "delete" || confirmText.trim() !== "삭제"}
-          >
-            {busy === "delete" ? "삭제 중... Löscht..." : "모든 단어 삭제 Alle Wörter löschen"}
-          </button>
+          {message && <p className="muted" style={{ marginTop: 10 }}>{message}</p>}
         </div>
-      </div>
+      )}
     </main>
   );
 }

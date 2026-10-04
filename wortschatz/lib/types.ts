@@ -40,6 +40,8 @@ export type Pattern = {
   created_at: string;
   review_stage: number;
   next_review_at: string | null;
+  sorted_at: string | null; // null = 아직 분류하지 않은 새 패턴
+  sort_result: "known" | "unknown" | null;
 };
 
 export type Example = {

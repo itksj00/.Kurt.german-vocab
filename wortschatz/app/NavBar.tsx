@@ -24,11 +24,12 @@ export default function NavBar() {
   useEffect(() => {
     let active = true;
     async function load() {
-      const { count, error } = await supabase
-        .from("words")
-        .select("id", { count: "exact", head: true })
-        .is("sorted_at", null);
-      if (active && !error) setPending(count ?? 0);
+      const [w, p] = await Promise.all([
+        supabase.from("words").select("id", { count: "exact", head: true }).is("sorted_at", null),
+        supabase.from("patterns").select("id", { count: "exact", head: true }).is("sorted_at", null),
+      ]);
+      // patterns 테이블이 아직 없어도(SQL 실행 전) 단어 수는 표시한다.
+      if (active && !w.error) setPending((w.count ?? 0) + (p.error ? 0 : (p.count ?? 0)));
     }
     load();
     window.addEventListener("focus", load);

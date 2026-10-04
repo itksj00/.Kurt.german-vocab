@@ -4,7 +4,8 @@ import { useRef, useState } from "react";
 import * as XLSX from "xlsx";
 import { supabase } from "@/lib/supabaseClient";
 import { patternText } from "@/lib/patterns";
-import { parsePatternRow, patternKey } from "@/lib/patternImport";
+import { explainPatternRowFailure, parsePatternRow, patternKey } from "@/lib/patternImport";
+import { readAllRows } from "@/lib/xlsxRows";
 import type { Pattern } from "@/lib/types";
 
 const TEMPLATE_HEADERS = ["패턴", "뜻", "예문1", "예문1뜻", "예문2", "예문2뜻", "예문3", "예문3뜻"];
@@ -35,6 +36,7 @@ const PATTERN_COLS = "id, verb, reflexive, preposition, pattern_case, meaning, w
 export default function PatternSettings() {
   const [busy, setBusy] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [progress, setProgress] = useState("");
   const [confirmText, setConfirmText] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -111,8 +113,8 @@ export default function PatternSettings() {
     setMessage(null);
     try {
       const wb = XLSX.read(await file.arrayBuffer(), { type: "array" });
-      const sheet = wb.Sheets[wb.SheetNames[0]];
-      const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: "" });
+      // 모든 시트의 데이터 행을 읽는다 (시트 범위 정보가 잘못된 파일도 처리)
+      const rows = readAllRows(wb);
 
       // 이미 있는 패턴(그리고 같은 파일 안의 반복)은 건너뛴다.
       const { data: existing, error: exErr } = await supabase
@@ -126,10 +128,17 @@ export default function PatternSettings() {
       let success = 0;
       let fail = 0;
       let skipped = 0;
-      for (const row of rows) {
-        const parsed = parsePatternRow(row);
+      const reasons: string[] = [];
+      const noteFail = (r: { sheet: string; rowNo: number }, why: string) => {
+        fail++;
+        if (reasons.length < 8) reasons.push(`· ${r.sheet} ${r.rowNo}행: ${why}`);
+      };
+      for (let i = 0; i < rows.length; i++) {
+        const r = rows[i];
+        setProgress(`${i + 1} / ${rows.length}`);
+        const parsed = parsePatternRow(r.data);
         if (!parsed) {
-          fail++;
+          noteFail(r, explainPatternRowFailure(r.data));
           continue;
         }
         const key = patternKey(parsed.pattern);
@@ -143,22 +152,29 @@ export default function PatternSettings() {
           .select("id")
           .single();
         if (error || !inserted) {
-          fail++;
+          noteFail(r, `저장 실패 (${error?.message ?? "알 수 없음"})`);
           continue;
         }
         seen.add(key);
         if (parsed.examples.length > 0) {
-          await supabase
+          const { error: exErr } = await supabase
             .from("pattern_examples")
             .insert(parsed.examples.map((x) => ({ pattern_id: inserted.id, ...x })));
+          if (exErr) reasons.push(`· ${r.sheet} ${r.rowNo}행: 패턴은 저장됐지만 예문 저장 실패 (${exErr.message})`);
         }
         success++;
       }
-      setMessage(`패턴 가져오기 완료: 성공 ${success}건, 중복 건너뜀 ${skipped}건, 실패 ${fail}건`);
+      window.dispatchEvent(new Event("wortschatz:words-changed"));
+      window.dispatchEvent(new Event("wortschatz:sort-changed"));
+      setMessage(
+        `패턴 가져오기 완료: 읽은 행 ${rows.length}개 → 성공 ${success}건, 중복 건너뜀 ${skipped}건, 실패 ${fail}건` +
+          (reasons.length ? `\n${reasons.join("\n")}` : "")
+      );
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "엑셀 파일을 읽지 못했습니다.");
     } finally {
       setBusy(null);
+      setProgress("");
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
   }
@@ -209,7 +225,7 @@ export default function PatternSettings() {
         템플릿의 열: 패턴 · 뜻 · 예문1 · 예문1뜻 · 예문2 · 예문2뜻 …
         &ldquo;패턴&rdquo; 칸에는 sich auf + Akk. freuen, teilnehmen an + Dat. 처럼 적습니다(격은 Akk./Dat./Gen.).
         &ldquo;패턴&rdquo; 열 대신 동사 · 재귀(sich) · 전치사 · 격 열로 나눠 써도 됩니다.
-        이미 등록된 패턴과 같은 것은 건너뜁니다. 예문 열은 몇 개든 추가할 수 있습니다.
+        이미 등록된 패턴과 같은 것은 건너뜁니다. 예문 열은 몇 개든 추가할 수 있고, 시트가 여러 개면 모든 시트를 읽습니다(시트마다 첫 행이 열 이름).
       </p>
       <label style={{ marginBottom: 4 }}>엑셀 파일 선택 Excel-Datei auswählen</label>
       <input
@@ -220,7 +236,7 @@ export default function PatternSettings() {
         disabled={busy === "import"}
         style={{ marginBottom: 4 }}
       />
-      {busy === "import" && <p className="muted">가져오는 중입니다...</p>}
+      {busy === "import" && <p className="muted">가져오는 중입니다... {progress}</p>}
 
       <div className="section-title">패턴 전체 삭제 Alle Muster löschen</div>
       <p className="muted" style={{ marginBottom: 10 }}>
@@ -244,7 +260,11 @@ export default function PatternSettings() {
         </button>
       </div>
 
-      {message && <p className="muted" style={{ marginTop: 10 }}>{message}</p>}
+      {message && (
+        <p className="muted" style={{ marginTop: 10, whiteSpace: "pre-line" }}>
+          {message}
+        </p>
+      )}
     </div>
   );
 }

@@ -19,7 +19,7 @@ export default function PatternsPage() {
       const { data, error } = await supabase
         .from("patterns")
         .select(
-          "id, verb, reflexive, preposition, pattern_case, meaning, wrong_count, last_studied_at, created_at, review_stage, next_review_at"
+          "id, verb, reflexive, preposition, pattern_case, meaning, wrong_count, last_studied_at, created_at, review_stage, next_review_at, sorted_at, sort_result"
         )
         .order("verb", { ascending: true });
       if (!active) return;

@@ -54,6 +54,7 @@ export default function ReviewPage() {
         const res = await supabase
           .from("patterns")
           .select("id, verb, reflexive, preposition, pattern_case, meaning, review_stage, next_review_at")
+          .not("sorted_at", "is", null)
           .order("next_review_at", { ascending: true });
         errMsg = res.error?.message ?? null;
         data = ((res.data ?? []) as unknown as Pattern[]).map((p) => ({

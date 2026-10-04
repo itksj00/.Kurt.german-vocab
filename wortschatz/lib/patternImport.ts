@@ -87,3 +87,11 @@ export function parsePatternRow(row: Record<string, unknown>): ParsedPatternRow 
 
   return { pattern: { ...parts, meaning }, examples };
 }
+
+// 가져오기에 실패한 행의 이유 (사용자에게 보여줄 한 줄)
+export function explainPatternRowFailure(row: Record<string, unknown>): string {
+  if (!str(row["뜻"])) return "뜻이 비어 있음";
+  const text = str(row["패턴"]);
+  if (text) return `패턴을 해석하지 못함: "${text}"`;
+  return "패턴 열이 없거나 동사/전치사/격이 비어 있음";
+}
