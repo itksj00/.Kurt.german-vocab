@@ -82,15 +82,8 @@ export default function QuizRunner({ lockedScope, onStageChange, mode = "word" }
     async function load() {
       const fk = isPattern ? "pattern_id" : "word_id";
       const { data, error } = await supabase
-<<<<<<< HEAD
         .from(table)
         .select(isPattern ? PATTERN_COLS : WORD_COLS)
-=======
-        .from("words")
-        .select(
-          "id, word, meaning, part_of_speech, pronunciation, difficulty, gender, plural, perfekt_aux, partizip2, wrong_count, review_stage, next_review_at, last_studied_at, created_at, sorted_at, sort_result"
-        )
->>>>>>> a1364d085e51867aea4ab029f08b4c968ab9650e
         .order("created_at", { ascending: false });
       if (!active) return;
       const { data: exData } = await supabase
@@ -120,28 +113,13 @@ export default function QuizRunner({ lockedScope, onStageChange, mode = "word" }
     [allWords, isPattern]
   );
 
-  // 분류(알아요/몰라요)를 마치지 않은 새 단어는 퀴즈에서 제외하고, 하나라도 남아 있으면 시작할 수 없다.
-  const pendingCount = useMemo(
-    () => allWords.filter((w) => w.sorted_at === null).length,
-    [allWords]
-  );
-
   const scopedPool = useMemo(() => {
-<<<<<<< HEAD
     const sorted = isPattern ? allWords : allWords.filter((w) => (w as Word).sorted_at !== null);
     if (scope === "due") return sorted.filter((w) => isDue(w.next_review_at));
     if (scope === "all") return sorted;
     if (scope === "recent") return sorted.slice(0, RECENT_COUNT);
     return sorted.filter((w) => (w as Word).difficulty === difficulty);
   }, [allWords, scope, difficulty, isPattern]);
-=======
-    const sorted = allWords.filter((w) => w.sorted_at !== null);
-    if (scope === "due") return sorted.filter((w) => isDue(w.next_review_at));
-    if (scope === "all") return sorted;
-    if (scope === "recent") return sorted.slice(0, RECENT_COUNT);
-    return sorted.filter((w) => w.difficulty === difficulty);
-  }, [allWords, scope, difficulty]);
->>>>>>> a1364d085e51867aea4ab029f08b4c968ab9650e
 
   function changeStage(next: Stage) {
     setStage(next);

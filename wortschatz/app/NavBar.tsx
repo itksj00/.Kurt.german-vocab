@@ -9,11 +9,8 @@ const TABS = [
   { href: "/words", ko: "단어 목록", de: "Wortliste" },
   { href: "/words/add", ko: "단어 추가", de: "Wort hinzufügen" },
   { href: "/sort", ko: "분류", de: "Sortieren" },
-<<<<<<< HEAD
   { href: "/patterns", ko: "패턴 목록", de: "Musterliste" },
   { href: "/patterns/add", ko: "패턴 추가", de: "Muster hinzufügen" },
-=======
->>>>>>> a1364d085e51867aea4ab029f08b4c968ab9650e
   { href: "/quiz", ko: "퀴즈", de: "Quiz" },
   { href: "/review", ko: "복습항목", de: "Wiederholung" },
   { href: "/settings", ko: "설정", de: "Einstellungen" },
