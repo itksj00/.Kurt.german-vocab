@@ -48,6 +48,7 @@ export default function ReviewPage() {
   useEffect(() => {
     let active = true;
     async function load() {
+<<<<<<< HEAD
       let data: Row[] | null = null;
       let errMsg: string | null = null;
       if (mode === "pattern") {
@@ -78,6 +79,13 @@ export default function ReviewPage() {
           next_review_at: w.next_review_at,
         }));
       }
+=======
+      const { data, error } = await supabase
+        .from("words")
+        .select("id, word, meaning, gender, review_stage, next_review_at")
+        .not("sorted_at", "is", null)
+        .order("next_review_at", { ascending: true });
+>>>>>>> a1364d085e51867aea4ab029f08b4c968ab9650e
       if (!active) return;
       if (errMsg) setErrorMsg(errMsg);
       else {

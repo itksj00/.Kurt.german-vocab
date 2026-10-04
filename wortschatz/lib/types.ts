@@ -23,6 +23,7 @@ export type Word = {
   created_at: string;
   sorted_at: string | null; // null = 아직 분류하지 않은 새 단어
   sort_result: "known" | "unknown" | null;
+<<<<<<< HEAD
 };
 
 // 동사 + 전치사 + 격 패턴 (예: sich auf + Akk. freuen)
@@ -40,6 +41,8 @@ export type Pattern = {
   created_at: string;
   review_stage: number;
   next_review_at: string | null;
+=======
+>>>>>>> a1364d085e51867aea4ab029f08b4c968ab9650e
 };
 
 export type Example = {

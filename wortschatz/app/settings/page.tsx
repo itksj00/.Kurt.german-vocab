@@ -358,8 +358,11 @@ export default function SettingsPage() {
         {message && <p className="muted" style={{ marginTop: 10 }}>{message}</p>}
       </div>
 
+<<<<<<< HEAD
       <PatternSettings />
 
+=======
+>>>>>>> a1364d085e51867aea4ab029f08b4c968ab9650e
       <div className="card">
         <div className="section-title">전체 삭제 Alles löschen</div>
         <p className="muted" style={{ marginBottom: 10 }}>
