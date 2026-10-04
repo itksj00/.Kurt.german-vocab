@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import * as XLSX from "xlsx";
 import { supabase } from "@/lib/supabaseClient";
 import type { Difficulty, Gender, PerfektAux } from "@/lib/types";
+import PatternSettings from "./PatternSettings";
 
 const TEMPLATE_HEADERS = [
   "단어",
@@ -70,6 +71,7 @@ type FullWord = {
 
 export default function SettingsPage() {
   const [busy, setBusy] = useState<string | null>(null);
+  const [confirmText, setConfirmText] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -265,6 +267,7 @@ export default function SettingsPage() {
         successCount++;
       }
 
+      window.dispatchEvent(new Event("wortschatz:words-changed"));
       setMessage(
         `가져오기 완료: 성공 ${successCount}건, 실패 ${failCount}건`
       );
@@ -275,6 +278,32 @@ export default function SettingsPage() {
     } finally {
       setBusy(null);
       if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
+
+  // 모든 단어 삭제 (예문은 on delete cascade로 함께 삭제됨)
+  async function handleDeleteAll() {
+    if (confirmText.trim() !== "삭제") return;
+    setBusy("delete");
+    setMessage(null);
+    try {
+      const { count, error: countError } = await supabase
+        .from("words")
+        .select("id", { count: "exact", head: true });
+      if (countError) throw new Error(countError.message);
+      const { error } = await supabase.from("words").delete().gte("id", 0);
+      if (error) throw new Error(error.message);
+      setConfirmText("");
+      window.dispatchEvent(new Event("wortschatz:words-changed"));
+      setMessage(`전체 삭제 완료 Alles gelöscht: 단어 ${count ?? 0}개와 예문을 삭제했습니다.`);
+    } catch (err) {
+      setMessage(
+        `삭제하지 못했습니다 Löschen fehlgeschlagen: ${
+          err instanceof Error ? err.message : "알 수 없는 오류"
+        }`
+      );
+    } finally {
+      setBusy(null);
     }
   }
 
@@ -327,6 +356,32 @@ export default function SettingsPage() {
         )}
 
         {message && <p className="muted" style={{ marginTop: 10 }}>{message}</p>}
+      </div>
+
+      <PatternSettings />
+
+      <div className="card">
+        <div className="section-title">전체 삭제 Alles löschen</div>
+        <p className="muted" style={{ marginBottom: 10 }}>
+          등록한 모든 단어와 예문, 복습 기록이 삭제되며 되돌릴 수 없습니다. 먼저 위의
+          JSON 내보내기로 백업하세요. 계속하려면 아래 칸에 &ldquo;삭제&rdquo;를 입력하세요.
+        </p>
+        <input
+          value={confirmText}
+          onChange={(e) => setConfirmText(e.target.value)}
+          placeholder="삭제"
+          disabled={busy === "delete"}
+          style={{ marginBottom: 10 }}
+        />
+        <div className="row">
+          <button
+            className="btn danger"
+            onClick={handleDeleteAll}
+            disabled={busy === "delete" || confirmText.trim() !== "삭제"}
+          >
+            {busy === "delete" ? "삭제 중... Löscht..." : "모든 단어 삭제 Alle Wörter löschen"}
+          </button>
+        </div>
       </div>
     </main>
   );

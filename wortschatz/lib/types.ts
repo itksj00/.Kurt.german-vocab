@@ -21,6 +21,25 @@ export type Word = {
   next_review_at: string | null;
   last_studied_at: string | null;
   created_at: string;
+  sorted_at: string | null; // null = 아직 분류하지 않은 새 단어
+  sort_result: "known" | "unknown" | null;
+};
+
+// 동사 + 전치사 + 격 패턴 (예: sich auf + Akk. freuen)
+export type PatternCase = "Akk" | "Dat" | "Gen";
+
+export type Pattern = {
+  id: number;
+  verb: string;
+  reflexive: boolean; // true면 "sich"가 붙는 재귀동사
+  preposition: string;
+  pattern_case: PatternCase;
+  meaning: string;
+  wrong_count: number;
+  last_studied_at: string | null;
+  created_at: string;
+  review_stage: number;
+  next_review_at: string | null;
 };
 
 export type Example = {

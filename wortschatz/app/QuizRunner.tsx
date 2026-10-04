@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
-import type { Difficulty, Word } from "@/lib/types";
+import type { Difficulty, Pattern, Word } from "@/lib/types";
 import { isDue, nextSchedule } from "@/lib/srs";
 import {
   buildQuestion,
@@ -14,6 +14,8 @@ import {
   type Question,
 } from "@/lib/quizGen";
 import { withArticle } from "@/lib/wordDisplay";
+import { buildPatternQuestion } from "@/lib/patternQuiz";
+import { patternText } from "@/lib/patterns";
 
 type Scope = "due" | "all" | "recent" | "difficulty";
 
@@ -24,16 +26,32 @@ const RECENT_COUNT = 20;
 
 export type Stage = "setup" | "playing" | "result";
 
-type Answered = { word: Word; wrong: boolean };
+// 퀴즈 대상: 단어 또는 패턴 (SRS 필드는 공통)
+type Item = Word | Pattern;
+type Answered = { word: Item; wrong: boolean };
+
+const WORD_COLS: string =
+  "id, word, meaning, part_of_speech, pronunciation, difficulty, gender, plural, perfekt_aux, partizip2, wrong_count, review_stage, next_review_at, last_studied_at, created_at, sorted_at, sort_result";
+const PATTERN_COLS: string =
+  "id, verb, reflexive, preposition, pattern_case, meaning, wrong_count, review_stage, next_review_at, last_studied_at, created_at";
+
+function itemLabel(i: Item): string {
+  return "verb" in i ? patternText(i) : withArticle(i);
+}
 
 type Props = {
+  // 출제 대상: 단어(기본) 또는 패턴
+  mode?: "word" | "pattern";
   // 지정하면 출제 범위 선택을 숨기고 해당 범위로 고정한다 (복습 페이지용).
   lockedScope?: Scope;
   onStageChange?: (stage: Stage) => void;
 };
 
-export default function QuizRunner({ lockedScope, onStageChange }: Props) {
-  const [allWords, setAllWords] = useState<Word[]>([]);
+export default function QuizRunner({ lockedScope, onStageChange, mode = "word" }: Props) {
+  const isPattern = mode === "pattern";
+  const table = isPattern ? "patterns" : "words";
+  const noun = isPattern ? "패턴" : "단어";
+  const [allWords, setAllWords] = useState<Item[]>([]);
   const [examplesByWord, setExamplesByWord] = useState<ExampleMap>({});
   const [loading, setLoading] = useState(true);
 
@@ -42,7 +60,7 @@ export default function QuizRunner({ lockedScope, onStageChange }: Props) {
 
   const [stage, setStage] = useState<Stage>("setup");
   const [reloadKey, setReloadKey] = useState(0);
-  const [queue, setQueue] = useState<Word[]>([]);
+  const [queue, setQueue] = useState<Item[]>([]);
   const [qIndex, setQIndex] = useState(0);
   const [answered, setAnswered] = useState<Answered[]>([]);
   // 틀린 문제 다시 풀기(연습) 라운드 여부 — 복습 일정/통계에는 반영하지 않는다.
@@ -62,23 +80,22 @@ export default function QuizRunner({ lockedScope, onStageChange }: Props) {
   useEffect(() => {
     let active = true;
     async function load() {
+      const fk = isPattern ? "pattern_id" : "word_id";
       const { data, error } = await supabase
-        .from("words")
-        .select(
-          "id, word, meaning, part_of_speech, pronunciation, difficulty, gender, plural, perfekt_aux, partizip2, wrong_count, review_stage, next_review_at, last_studied_at, created_at"
-        )
+        .from(table)
+        .select(isPattern ? PATTERN_COLS : WORD_COLS)
         .order("created_at", { ascending: false });
       if (!active) return;
       const { data: exData } = await supabase
-        .from("examples")
-        .select("word_id, sentence, translation");
+        .from(isPattern ? "pattern_examples" : "examples")
+        .select(`${fk}, sentence, translation`);
       if (!active) return;
-      if (!error) setAllWords(data ?? []);
+      if (!error) setAllWords((data ?? []) as unknown as Item[]);
       const map: ExampleMap = {};
-      (exData ?? []).forEach((e) => {
-        (map[e.word_id] ??= []).push({
-          sentence: e.sentence,
-          translation: e.translation ?? null,
+      ((exData ?? []) as unknown as Record<string, unknown>[]).forEach((e) => {
+        (map[e[fk] as number] ??= []).push({
+          sentence: e.sentence as string,
+          translation: (e.translation as string | null) ?? null,
         });
       });
       setExamplesByWord(map);
@@ -88,14 +105,21 @@ export default function QuizRunner({ lockedScope, onStageChange }: Props) {
     return () => {
       active = false;
     };
-  }, [reloadKey]);
+  }, [reloadKey, isPattern, table]);
+
+  // 분류(알아요/몰라요)를 마치지 않은 새 단어는 퀴즈에서 제외하고, 하나라도 남아 있으면 시작할 수 없다. (패턴은 분류 없음)
+  const pendingCount = useMemo(
+    () => (isPattern ? 0 : allWords.filter((w) => (w as Word).sorted_at === null).length),
+    [allWords, isPattern]
+  );
 
   const scopedPool = useMemo(() => {
-    if (scope === "due") return allWords.filter((w) => isDue(w.next_review_at));
-    if (scope === "all") return allWords;
-    if (scope === "recent") return allWords.slice(0, RECENT_COUNT);
-    return allWords.filter((w) => w.difficulty === difficulty);
-  }, [allWords, scope, difficulty]);
+    const sorted = isPattern ? allWords : allWords.filter((w) => (w as Word).sorted_at !== null);
+    if (scope === "due") return sorted.filter((w) => isDue(w.next_review_at));
+    if (scope === "all") return sorted;
+    if (scope === "recent") return sorted.slice(0, RECENT_COUNT);
+    return sorted.filter((w) => (w as Word).difficulty === difficulty);
+  }, [allWords, scope, difficulty, isPattern]);
 
   function changeStage(next: Stage) {
     setStage(next);
@@ -105,8 +129,12 @@ export default function QuizRunner({ lockedScope, onStageChange }: Props) {
   }
 
   // 단어 1개당 문제 1개를 새로 만들고 응답 상태를 초기화한다 (이벤트 핸들러에서만 호출).
-  function setupQuestion(word: Word) {
-    setQuestion(buildQuestion(word, allWords, examplesByWord));
+  function setupQuestion(word: Item) {
+    setQuestion(
+      isPattern
+        ? buildPatternQuestion(word as Pattern, allWords as Pattern[], examplesByWord)
+        : buildQuestion(word as Word, allWords as Word[], examplesByWord)
+    );
     setSelected(null);
     setTypeInput("");
     setPlaced([]);
@@ -115,7 +143,7 @@ export default function QuizRunner({ lockedScope, onStageChange }: Props) {
   }
 
   function startQuiz() {
-    if (scopedPool.length === 0) return;
+    if (scopedPool.length === 0 || pendingCount > 0) return;
     const q = shuffle(scopedPool);
     setQueue(q);
     setQIndex(0);
@@ -206,12 +234,12 @@ export default function QuizRunner({ lockedScope, onStageChange }: Props) {
             // 복습 시점에 맞힘 → 한 단계 상승 (연습으로 미리 푼 경우는 일정 유지)
             Object.assign(update, nextSchedule(a.word.review_stage, true, nowMs));
           }
-          return supabase.from("words").update(update).eq("id", a.word.id);
+          return supabase.from(table).update(update).eq("id", a.word.id);
         })
       );
     }
     finalize();
-  }, [stage, answered]);
+  }, [stage, answered, table]);
 
   if (loading) {
     return (
@@ -223,12 +251,14 @@ export default function QuizRunner({ lockedScope, onStageChange }: Props) {
 
   if (stage === "setup") {
     const withEx = scopedPool.filter((w) => hasExamples(w, examplesByWord)).length;
-    const scopes: { key: Scope; ko: string; de: string }[] = [
+    const allScopes: { key: Scope; ko: string; de: string }[] = [
       { key: "due", ko: "복습 대상", de: "Heute fällig" },
-      { key: "all", ko: "전체 단어", de: "Alle Wörter" },
+      { key: "all", ko: `전체 ${noun}`, de: isPattern ? "Alle Muster" : "Alle Wörter" },
       { key: "recent", ko: "최근 추가", de: "Zuletzt hinzugefügt" },
       { key: "difficulty", ko: "난이도별", de: "Nach Niveau" },
     ];
+    // 패턴에는 난이도가 없다.
+    const scopes = allScopes.filter((s) => !isPattern || s.key !== "difficulty");
     return (
       <div>
         <div className="card">
@@ -264,13 +294,22 @@ export default function QuizRunner({ lockedScope, onStageChange }: Props) {
           )}
 
           <p className="muted" style={{ marginBottom: 10 }}>
-            대상 단어 {scopedPool.length}개 / 예문 있는 단어 {withEx}개
+            대상 {noun} {scopedPool.length}개 / 예문 있는 {noun} {withEx}개
           </p>
+
+          {pendingCount > 0 && (
+            <p style={{ marginBottom: 10, color: "var(--danger)" }}>
+              분류하지 않은 새 단어가 {pendingCount}개 있습니다. 먼저 분류해야 퀴즈를 시작할 수 있어요.{" "}
+              <Link href="/sort" style={{ color: "var(--accent)" }}>
+                분류하기 Sortieren
+              </Link>
+            </p>
+          )}
 
           <button
             className="btn"
             onClick={startQuiz}
-            disabled={scopedPool.length === 0}
+            disabled={scopedPool.length === 0 || pendingCount > 0}
           >
             퀴즈 시작 Quiz starten
           </button>
@@ -452,7 +491,7 @@ export default function QuizRunner({ lockedScope, onStageChange }: Props) {
               </p>
             ) : (
               <p className="muted" style={{ marginTop: 8 }}>
-                틀린 {wrongCount}개 단어는 1일 단계로 돌아가 내일 다시 복습됩니다
+                틀린 {wrongCount}개 {noun}{isPattern ? "은" : "는"} 1일 단계로 돌아가 내일 다시 복습됩니다
                 {!lockedScope && (
                   <>
                     {" "}·{" "}
@@ -464,14 +503,14 @@ export default function QuizRunner({ lockedScope, onStageChange }: Props) {
               </p>
             )}
             <div className="section-title" style={{ marginTop: 14 }}>
-              틀린 단어 Fehlerliste
+              틀린 {noun} Fehlerliste
             </div>
             <ul className="muted" style={{ margin: "0 0 4px", paddingLeft: 18 }}>
               {answered
                 .filter((a) => a.wrong)
                 .map((a) => (
                   <li key={a.word.id}>
-                    {withArticle(a.word)} — {a.word.meaning}
+                    {itemLabel(a.word)} — {a.word.meaning}
                   </li>
                 ))}
             </ul>

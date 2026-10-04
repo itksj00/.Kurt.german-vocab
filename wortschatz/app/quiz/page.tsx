@@ -1,9 +1,9 @@
-import QuizRunner from "../QuizRunner";
+import QuizTabs from "./QuizTabs";
 
 export default function QuizPage() {
   return (
     <main className="site-main narrow">
-      <QuizRunner />
+      <QuizTabs />
     </main>
   );
 }

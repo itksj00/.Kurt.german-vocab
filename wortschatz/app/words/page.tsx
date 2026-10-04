@@ -34,7 +34,7 @@ export default function WordsPage() {
       const { data, error } = await supabase
         .from("words")
         .select(
-          "id, word, meaning, part_of_speech, pronunciation, difficulty, gender, plural, perfekt_aux, partizip2, wrong_count, review_stage, next_review_at, last_studied_at, created_at"
+          "id, word, meaning, part_of_speech, pronunciation, difficulty, gender, plural, perfekt_aux, partizip2, wrong_count, review_stage, next_review_at, last_studied_at, created_at, sorted_at, sort_result"
         )
         .order("word", { ascending: true });
       if (!active) return;

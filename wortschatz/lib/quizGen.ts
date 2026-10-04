@@ -14,11 +14,14 @@ export type QKind =
   | "mcMeaning"
   | "deInput";
 
+// 패턴 퀴즈 전용 유형 (lib/patternQuiz.ts)
+export type PKind = "prepCloze" | "prepInput" | "caseChoice" | "meaningToPattern";
+
 export type QFormat = "choice" | "input" | "reorder";
 
 export type Question = {
-  kind: QKind;
-  wordId: number;
+  kind: QKind | PKind;
+  wordId: number; // 단어 또는 패턴의 id
   format: QFormat;
   label: string; // 유형 라벨 (한/독 병기)
   prompt: string; // 문제 본문
@@ -407,8 +410,8 @@ export function eligibleKinds(
   return KINDS.filter((k) => BUILDERS[k](ctx) !== null);
 }
 
-export function hasExamples(w: Word, ex: ExampleMap): boolean {
-  return validExamples(w, ex).length > 0;
+export function hasExamples(w: { id: number }, ex: ExampleMap): boolean {
+  return (ex[w.id] ?? []).some((e) => has(e.sentence));
 }
 
 // 정오답 판정. reorder/choice/input 모두 문자열 하나로 비교한다.

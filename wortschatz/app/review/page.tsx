@@ -5,10 +5,20 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import { REVIEW_INTERVALS_DAYS, isDue } from "@/lib/srs";
 import { withArticle } from "@/lib/wordDisplay";
-import type { Gender } from "@/lib/types";
+import type { Gender, Pattern } from "@/lib/types";
+import { patternText } from "@/lib/patterns";
 import QuizRunner, { type Stage } from "../QuizRunner";
+import ModeTabs, { type Mode } from "../ModeTabs";
 
 type Row = {
+  id: number;
+  label: string; // 화면에 보여줄 이름 (관사 포함 단어 또는 패턴 표기)
+  meaning: string;
+  review_stage: number;
+  next_review_at: string | null;
+};
+
+type WordRow = {
   id: number;
   word: string;
   meaning: string;
@@ -30,17 +40,48 @@ export default function ReviewPage() {
   const [nowMs, setNowMs] = useState(0);
   const [stage, setStage] = useState<Stage>("setup");
   const [reloadKey, setReloadKey] = useState(0);
+  const [mode, setMode] = useState<Mode>("word");
+  const isPattern = mode === "pattern";
+  const noun = isPattern ? "패턴" : "단어";
+  const base = isPattern ? "/patterns" : "/words";
 
   useEffect(() => {
     let active = true;
     async function load() {
-      const { data, error } = await supabase
-        .from("words")
-        .select("id, word, meaning, gender, review_stage, next_review_at")
-        .order("next_review_at", { ascending: true });
+      let data: Row[] | null = null;
+      let errMsg: string | null = null;
+      if (mode === "pattern") {
+        const res = await supabase
+          .from("patterns")
+          .select("id, verb, reflexive, preposition, pattern_case, meaning, review_stage, next_review_at")
+          .order("next_review_at", { ascending: true });
+        errMsg = res.error?.message ?? null;
+        data = ((res.data ?? []) as unknown as Pattern[]).map((p) => ({
+          id: p.id,
+          label: patternText(p),
+          meaning: p.meaning,
+          review_stage: p.review_stage,
+          next_review_at: p.next_review_at,
+        }));
+      } else {
+        const res = await supabase
+          .from("words")
+          .select("id, word, meaning, gender, review_stage, next_review_at")
+          .not("sorted_at", "is", null)
+          .order("next_review_at", { ascending: true });
+        errMsg = res.error?.message ?? null;
+        data = ((res.data ?? []) as unknown as WordRow[]).map((w) => ({
+          id: w.id,
+          label: withArticle(w),
+          meaning: w.meaning,
+          review_stage: w.review_stage,
+          next_review_at: w.next_review_at,
+        }));
+      }
       if (!active) return;
-      if (error) setErrorMsg(error.message);
+      if (errMsg) setErrorMsg(errMsg);
       else {
+        setErrorMsg(null);
         setNowMs(Date.now());
         setRows(data ?? []);
       }
@@ -50,7 +91,13 @@ export default function ReviewPage() {
     return () => {
       active = false;
     };
-  }, [reloadKey]);
+  }, [reloadKey, mode]);
+
+  function changeMode(next: Mode) {
+    setMode(next);
+    setRows([]);
+    setLoading(true);
+  }
 
   function handleStageChange(next: Stage) {
     setStage(next);
@@ -64,6 +111,8 @@ export default function ReviewPage() {
 
   return (
     <main className="site-main narrow">
+      {showLists && <ModeTabs mode={mode} onChange={changeMode} />}
+
       {showLists && (
         <div className="page-hero">
           <div>
@@ -91,7 +140,7 @@ export default function ReviewPage() {
         <div className="section-title" style={{ marginTop: 0 }}>
           복습 퀴즈 Wiederholungs-Quiz
         </div>
-        <QuizRunner lockedScope="due" onStageChange={handleStageChange} />
+        <QuizRunner key={mode} mode={mode} lockedScope="due" onStageChange={handleStageChange} />
       </div>
 
       {showLists && loading && (
@@ -102,21 +151,21 @@ export default function ReviewPage() {
         <>
           <div className="card">
             <div className="section-title" style={{ marginTop: 0 }}>
-              오늘 복습할 단어 Heute fällig
+              오늘 복습할 {noun} Heute fällig
             </div>
             {due.length === 0 ? (
               <p className="empty-state">
-                오늘 복습할 단어가 없습니다. Heute nichts zu wiederholen.
+                오늘 복습할 {isPattern ? "패턴이" : "단어가"} 없습니다. Heute nichts zu wiederholen.
               </p>
             ) : (
               due.map((r) => (
                 <div className="word-row" key={r.id}>
                   <Link
-                    href={`/words/${r.id}`}
+                    href={`${base}/${r.id}`}
                     className="word-main"
                     style={{ flex: 1 }}
                   >
-                    {withArticle(r)}
+                    {r.label}
                     <small>{r.meaning}</small>
                   </Link>
                   <span className="tag">{r.review_stage + 1}단계 Stufe</span>
@@ -133,11 +182,11 @@ export default function ReviewPage() {
               {upcoming.slice(0, 30).map((r) => (
                 <div className="word-row" key={r.id}>
                   <Link
-                    href={`/words/${r.id}`}
+                    href={`${base}/${r.id}`}
                     className="word-main"
                     style={{ flex: 1 }}
                   >
-                    {withArticle(r)}
+                    {r.label}
                     <small>{r.meaning}</small>
                   </Link>
                   <span className="tag">
