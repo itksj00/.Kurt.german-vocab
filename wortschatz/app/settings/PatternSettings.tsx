@@ -3,12 +3,12 @@
 import { useRef, useState } from "react";
 import * as XLSX from "xlsx";
 import { supabase } from "@/lib/supabaseClient";
-import { patternText } from "@/lib/patterns";
+import { PATTERN_SELECT, patternText, typeLabel } from "@/lib/patterns";
 import { explainPatternRowFailure, parsePatternRow, patternKey } from "@/lib/patternImport";
 import { readAllRows } from "@/lib/xlsxRows";
 import type { Pattern } from "@/lib/types";
 
-const TEMPLATE_HEADERS = ["패턴", "뜻", "예문1", "예문1뜻", "예문2", "예문2뜻", "예문3", "예문3뜻"];
+const TEMPLATE_HEADERS = ["유형", "앞말", "재귀", "전치사", "격", "표현", "뜻", "메모", "예문1", "예문1뜻", "예문2", "예문2뜻"];
 
 function downloadBlob(content: BlobPart, filename: string, type: string) {
   const blob = new Blob([content], { type });
@@ -22,16 +22,17 @@ function downloadBlob(content: BlobPart, filename: string, type: string) {
 
 type FullPattern = {
   pattern: string;
-  verb: string;
+  type: string;
+  head: string;
   reflexive: boolean;
   preposition: string;
   pattern_case: string;
+  expression: string;
   meaning: string;
+  note: string;
   wrong_count: number;
   examples: { sentence: string; translation: string | null }[];
 };
-
-const PATTERN_COLS = "id, verb, reflexive, preposition, pattern_case, meaning, wrong_count";
 
 export default function PatternSettings() {
   const [busy, setBusy] = useState<string | null>(null);
@@ -43,19 +44,22 @@ export default function PatternSettings() {
   async function fetchAll(): Promise<FullPattern[]> {
     const { data, error } = await supabase
       .from("patterns")
-      .select(PATTERN_COLS)
-      .order("verb", { ascending: true });
+      .select(PATTERN_SELECT)
+      .order("created_at", { ascending: true });
     if (error) throw error;
     const { data: exs } = await supabase
       .from("pattern_examples")
       .select("pattern_id, sentence, translation");
     return ((data ?? []) as unknown as Pattern[]).map((p) => ({
       pattern: patternText(p),
-      verb: p.verb,
+      type: typeLabel(p.pattern_type),
+      head: p.verb ?? "",
       reflexive: p.reflexive,
-      preposition: p.preposition,
-      pattern_case: p.pattern_case,
+      preposition: p.preposition ?? "",
+      pattern_case: p.pattern_case ?? "",
+      expression: p.expression ?? "",
       meaning: p.meaning,
+      note: p.note ?? "",
       wrong_count: p.wrong_count,
       examples: (exs ?? []).filter((e) => e.pattern_id === p.id),
     }));
@@ -69,16 +73,19 @@ export default function PatternSettings() {
       if (kind === "json") {
         downloadBlob(JSON.stringify(rows, null, 2), "wortschatz_patterns.json", "application/json");
       } else {
-        const header = ["패턴", "동사", "재귀", "전치사", "격", "뜻", "틀린횟수", "예문", "예문뜻"];
+        const header = ["패턴", "유형", "앞말", "재귀", "전치사", "격", "표현", "뜻", "메모", "틀린횟수", "예문", "예문뜻"];
         const lines = [header.join(",")];
         for (const r of rows) {
           const cells = [
             r.pattern,
-            r.verb,
+            r.type,
+            r.head,
             r.reflexive ? "sich" : "",
             r.preposition,
             r.pattern_case,
+            r.expression,
             r.meaning,
+            r.note,
             String(r.wrong_count),
             r.examples.map((e) => e.sentence).join(" / "),
             r.examples.map((e) => e.translation ?? "").join(" / "),
@@ -97,8 +104,12 @@ export default function PatternSettings() {
   function handleTemplate() {
     const ws = XLSX.utils.aoa_to_sheet([
       TEMPLATE_HEADERS,
-      ["sich auf + Akk. freuen", "~을 기대하다", "Ich freue mich auf das Wochenende.", "나는 주말이 기대된다.", "", "", "", ""],
-      ["teilnehmen an + Dat.", "~에 참가하다", "Er nimmt an dem Kurs teil.", "그는 수업에 참가한다.", "", "", "", ""],
+      ["동사", "freuen", "sich", "auf", "Akk.", "", "~을 기대하다", "", "Ich freue mich auf das Wochenende.", "나는 주말이 기대된다.", "", ""],
+      ["동사", "teilnehmen", "", "an", "Dat.", "", "~에 참가하다", "분리동사", "Er nimmt an dem Kurs teil.", "그는 수업에 참가한다.", "", ""],
+      ["명사", "Angst", "", "vor", "Dat.", "", "~이 두렵다", "", "Ich habe Angst vor Spinnen.", "나는 거미가 무섭다.", "", ""],
+      ["전치사", "", "", "aufgrund", "Gen.", "", "~때문에", "격식체", "Aufgrund des Regens bleiben wir zu Hause.", "비 때문에 우리는 집에 있는다.", "", ""],
+      ["접속사", "", "", "", "", "sowohl … als auch …", "~뿐 아니라 ~도", "두 부분이 한 쌍", "Er spricht sowohl Deutsch als auch Englisch.", "그는 독일어도 영어도 한다.", "", ""],
+      ["접속사", "", "", "", "", "obwohl", "~임에도 불구하고", "부문장: 동사가 문장 끝", "Ich gehe spazieren, obwohl es regnet.", "비가 오는데도 나는 산책한다.", "", ""],
     ]);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "patterns");
@@ -222,9 +233,11 @@ export default function PatternSettings() {
         </button>
       </div>
       <p className="muted" style={{ margin: "6px 0 10px" }}>
-        템플릿의 열: 패턴 · 뜻 · 예문1 · 예문1뜻 · 예문2 · 예문2뜻 …
-        &ldquo;패턴&rdquo; 칸에는 sich auf + Akk. freuen, teilnehmen an + Dat. 처럼 적습니다(격은 Akk./Dat./Gen.).
-        &ldquo;패턴&rdquo; 열 대신 동사 · 재귀(sich) · 전치사 · 격 열로 나눠 써도 됩니다.
+        템플릿의 열: 유형 · 앞말 · 재귀 · 전치사 · 격 · 표현 · 뜻 · 메모 · 예문1 · 예문1뜻 …
+        유형은 동사 / 명사(형용사 포함) / 전치사 / 접속사 중 하나입니다. 동사·명사는 앞말+전치사+격,
+        전치사는 전치사+격(예: aufgrund + Gen.), 접속사는 표현 칸(예: sowohl … als auch …)만 채우면 됩니다.
+        재귀동사는 재귀 칸에 sich를 적으세요. 열을 나누지 않고 &ldquo;패턴&rdquo; 한 칸에
+        sich auf + Akk. freuen, aufgrund + Gen. 처럼 적어도 인식합니다(접속사는 유형을 접속사로 지정).
         이미 등록된 패턴과 같은 것은 건너뜁니다. 예문 열은 몇 개든 추가할 수 있고, 시트가 여러 개면 모든 시트를 읽습니다(시트마다 첫 행이 열 이름).
       </p>
       <label style={{ marginBottom: 4 }}>엑셀 파일 선택 Excel-Datei auswählen</label>

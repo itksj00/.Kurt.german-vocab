@@ -5,7 +5,7 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import type { Pattern, Word } from "@/lib/types";
 import { posLabel, withArticle } from "@/lib/wordDisplay";
-import { patternText } from "@/lib/patterns";
+import { PATTERN_SELECT, patternText } from "@/lib/patterns";
 import ModeTabs, { type Mode } from "../ModeTabs";
 import {
   SWIPE_THRESHOLD,
@@ -20,8 +20,6 @@ type Done = { word: Item; result: SortResult };
 
 const WORD_COLS: string =
   "id, word, meaning, part_of_speech, pronunciation, difficulty, gender, plural, perfekt_aux, partizip2, wrong_count, review_stage, next_review_at, last_studied_at, created_at, sorted_at, sort_result";
-const PATTERN_COLS: string =
-  "id, verb, reflexive, preposition, pattern_case, meaning, wrong_count, review_stage, next_review_at, last_studied_at, created_at, sorted_at, sort_result";
 
 export default function SortPage() {
   // /sort#pattern 으로 들어오면 패턴 탭으로 시작한다. (로딩 화면에는 탭이 없어 서버 렌더와 어긋나지 않는다)
@@ -49,7 +47,7 @@ export default function SortPage() {
       const [res, other] = await Promise.all([
         supabase
           .from(table)
-          .select(table === "words" ? WORD_COLS : PATTERN_COLS)
+          .select(table === "words" ? WORD_COLS : PATTERN_SELECT)
           .is("sorted_at", null)
           .order("created_at", { ascending: true }),
         supabase.from(otherTable).select("id", { count: "exact", head: true }).is("sorted_at", null),

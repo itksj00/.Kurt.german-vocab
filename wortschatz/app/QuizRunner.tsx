@@ -15,7 +15,7 @@ import {
 } from "@/lib/quizGen";
 import { withArticle } from "@/lib/wordDisplay";
 import { buildPatternQuestion } from "@/lib/patternQuiz";
-import { patternText } from "@/lib/patterns";
+import { PATTERN_SELECT, patternText } from "@/lib/patterns";
 
 type Scope = "due" | "all" | "recent" | "difficulty";
 
@@ -32,9 +32,6 @@ type Answered = { word: Item; wrong: boolean };
 
 const WORD_COLS: string =
   "id, word, meaning, part_of_speech, pronunciation, difficulty, gender, plural, perfekt_aux, partizip2, wrong_count, review_stage, next_review_at, last_studied_at, created_at, sorted_at, sort_result";
-const PATTERN_COLS: string =
-  "id, verb, reflexive, preposition, pattern_case, meaning, wrong_count, review_stage, next_review_at, last_studied_at, created_at, sorted_at, sort_result";
-
 function itemLabel(i: Item): string {
   return "verb" in i ? patternText(i) : withArticle(i);
 }
@@ -83,7 +80,7 @@ export default function QuizRunner({ lockedScope, onStageChange, mode = "word" }
       const fk = isPattern ? "pattern_id" : "word_id";
       const { data, error } = await supabase
         .from(table)
-        .select(isPattern ? PATTERN_COLS : WORD_COLS)
+        .select(isPattern ? PATTERN_SELECT : WORD_COLS)
         .order("created_at", { ascending: false });
       if (!active) return;
       const { data: exData } = await supabase

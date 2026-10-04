@@ -6,7 +6,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { REVIEW_INTERVALS_DAYS, isDue } from "@/lib/srs";
 import { withArticle } from "@/lib/wordDisplay";
 import type { Gender, Pattern } from "@/lib/types";
-import { patternText } from "@/lib/patterns";
+import { PATTERN_SELECT, patternText } from "@/lib/patterns";
 import QuizRunner, { type Stage } from "../QuizRunner";
 import ModeTabs, { type Mode } from "../ModeTabs";
 
@@ -53,7 +53,7 @@ export default function ReviewPage() {
       if (mode === "pattern") {
         const res = await supabase
           .from("patterns")
-          .select("id, verb, reflexive, preposition, pattern_case, meaning, review_stage, next_review_at")
+          .select(PATTERN_SELECT)
           .not("sorted_at", "is", null)
           .order("next_review_at", { ascending: true });
         errMsg = res.error?.message ?? null;

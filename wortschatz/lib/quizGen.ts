@@ -15,7 +15,14 @@ export type QKind =
   | "deInput";
 
 // 패턴 퀴즈 전용 유형 (lib/patternQuiz.ts)
-export type PKind = "prepCloze" | "prepInput" | "caseChoice" | "meaningToPattern";
+export type PKind =
+  | "prepCloze"
+  | "prepInput"
+  | "caseChoice"
+  | "meaningToPattern"
+  | "connCloze"
+  | "connInput"
+  | "exprInput";
 
 export type QFormat = "choice" | "input" | "reorder";
 
@@ -415,8 +422,11 @@ export function hasExamples(w: { id: number }, ex: ExampleMap): boolean {
 }
 
 // 정오답 판정. reorder/choice/input 모두 문자열 하나로 비교한다.
+// exprInput(표현 전체 입력)은 "…", "...", "~" 같은 생략 표시를 무시하고 비교한다.
 export function isCorrect(q: Question, input: string): boolean {
-  const given = norm(input);
+  const clean = (v: string) =>
+    norm(q.kind === "exprInput" ? v.replace(/…|\.{3}|~/g, " ") : v);
+  const given = clean(input);
   if (!given) return false;
-  return [q.answer, ...(q.accept ?? [])].some((a) => norm(a) === given);
+  return [q.answer, ...(q.accept ?? [])].some((a) => clean(a) === given);
 }

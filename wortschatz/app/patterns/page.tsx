@@ -3,8 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
-import type { Pattern, PatternCase } from "@/lib/types";
-import { CASE_OPTIONS, caseLabel, patternText } from "@/lib/patterns";
+import type { Pattern, PatternCase, PatternType } from "@/lib/types";
+import { CASE_OPTIONS, PATTERN_SELECT, PATTERN_TYPES, caseLabel, patternText, typeLabel } from "@/lib/patterns";
 
 export default function PatternsPage() {
   const [patterns, setPatterns] = useState<Pattern[]>([]);
@@ -12,19 +12,21 @@ export default function PatternsPage() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [caseFilter, setCaseFilter] = useState<PatternCase | "전체">("전체");
+  const [typeFilter, setTypeFilter] = useState<PatternType | "전체">("전체");
 
   useEffect(() => {
     let active = true;
     async function load() {
       const { data, error } = await supabase
         .from("patterns")
-        .select(
-          "id, verb, reflexive, preposition, pattern_case, meaning, wrong_count, last_studied_at, created_at, review_stage, next_review_at, sorted_at, sort_result"
-        )
-        .order("verb", { ascending: true });
+        .select(PATTERN_SELECT)
+        .order("created_at", { ascending: false });
       if (!active) return;
       if (error) setErrorMsg(error.message);
-      else setPatterns((data ?? []) as Pattern[]);
+      else {
+        const list = (data ?? []) as unknown as Pattern[];
+        setPatterns(list.sort((x, y) => patternText(x).localeCompare(patternText(y), "de")));
+      }
       setLoading(false);
     }
     load();
@@ -37,12 +39,13 @@ export default function PatternsPage() {
     const q = search.trim().toLowerCase();
     return patterns.filter((p) => {
       if (caseFilter !== "전체" && p.pattern_case !== caseFilter) return false;
+      if (typeFilter !== "전체" && (p.pattern_type ?? "verb") !== typeFilter) return false;
       if (!q) return true;
       return (
         patternText(p).toLowerCase().includes(q) || p.meaning.toLowerCase().includes(q)
       );
     });
-  }, [patterns, search, caseFilter]);
+  }, [patterns, search, caseFilter, typeFilter]);
 
   return (
     <main className="site-main narrow">
@@ -79,6 +82,17 @@ export default function PatternsPage() {
             </option>
           ))}
         </select>
+        <select
+          value={typeFilter}
+          onChange={(e) => setTypeFilter(e.target.value as PatternType | "전체")}
+        >
+          <option value="전체">전체 유형 Alle Typen</option>
+          {PATTERN_TYPES.map((t) => (
+            <option key={t.value} value={t.value}>
+              {t.ko}
+            </option>
+          ))}
+        </select>
         <Link href="/patterns/add" className="btn">
           + 패턴 추가 Muster hinzufügen
         </Link>
@@ -100,7 +114,9 @@ export default function PatternsPage() {
               <div className="word-row" key={p.id}>
                 <Link href={`/patterns/${p.id}`} className="word-main" style={{ flex: 1 }}>
                   {patternText(p)}
-                  <small>{p.meaning}</small>
+                  <small>
+                    {typeLabel(p.pattern_type)} · {p.meaning}
+                  </small>
                 </Link>
               </div>
             ))

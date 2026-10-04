@@ -28,12 +28,18 @@ export type Word = {
 // 동사 + 전치사 + 격 패턴 (예: sich auf + Akk. freuen)
 export type PatternCase = "Akk" | "Dat" | "Gen";
 
+// verb: 동사 + 전치사 + 격 / noun: 명사·형용사 + 전치사 + 격 / prep: 전치사 + 격만 / conj: 접속사·연결 표현
+export type PatternType = "verb" | "noun" | "prep" | "conj";
+
 export type Pattern = {
   id: number;
-  verb: string;
+  pattern_type: PatternType;
+  verb: string | null; // 앞말: 동사/명사/형용사 (prep, conj에서는 null)
   reflexive: boolean; // true면 "sich"가 붙는 재귀동사
-  preposition: string;
-  pattern_case: PatternCase;
+  preposition: string | null; // conj에서는 null
+  pattern_case: PatternCase | null; // conj에서는 null
+  expression: string | null; // conj: 전체 표현 (예: sowohl … als auch …)
+  note: string | null; // 메모 (어순 등)
   meaning: string;
   wrong_count: number;
   last_studied_at: string | null;
