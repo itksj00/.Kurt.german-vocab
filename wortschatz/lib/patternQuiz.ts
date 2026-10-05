@@ -10,11 +10,13 @@ import {
   type Rng,
 } from "./quizGen";
 import {
+  COLLOCATION_NOUNS,
   COMMON_PREPS,
   CONJ_WORDS,
   GEN_PREPS,
   caseLabel,
   connectiveParts,
+  expressionWords,
   patternText,
 } from "./patterns";
 
@@ -22,6 +24,7 @@ import {
 // 유형별 출제:
 //  · 동사/명사·형용사 + 전치사 + 격, 전치사 + 격: 전치사 고르기·입력, 격 고르기, 뜻 → 패턴, 문장 배열
 //  · 접속사/연결 표현: 연결어 고르기·입력(예문 빈칸), 표현 입력, 뜻 → 패턴, 문장 배열
+//  · 고정 표현·연어(eine wichtige Rolle spielen): 핵심 단어 빈칸 고르기·입력(예문), 표현 입력, 뜻 → 패턴, 문장 배열
 
 type PatternKind = PKind | "reorder";
 
@@ -33,7 +36,9 @@ export const PATTERN_WEIGHTS: Record<PatternKind, number> = {
   reorder: 2,
   connCloze: 3,
   connInput: 2,
-  exprInput: 1,
+  exprInput: 2,
+  exprCloze: 3,
+  exprWord: 2,
 };
 
 const LABELS: Record<PatternKind, string> = {
@@ -45,6 +50,8 @@ const LABELS: Record<PatternKind, string> = {
   connCloze: "연결어 고르기 Konnektor wählen",
   connInput: "연결어 입력 Konnektor eingeben",
   exprInput: "표현 입력 Ausdruck eingeben",
+  exprCloze: "연어 빈칸 고르기 Kollokation wählen",
+  exprWord: "연어 빈칸 입력 Kollokation eingeben",
 };
 
 type Ctx = { p: Pattern; all: Pattern[]; ex: ExampleMap; rng: Rng };
@@ -60,6 +67,7 @@ const upperFirst = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 const typeOf = (p: Pattern) => p.pattern_type ?? "verb";
 
 const isConj = (p: Pattern) => typeOf(p) === "conj" && has(p.expression);
+const isExpr = (p: Pattern) => typeOf(p) === "expr" && has(p.expression);
 const isPrepLike = (p: Pattern) =>
   typeOf(p) !== "conj" && has(p.preposition) && !!p.pattern_case;
 
@@ -151,7 +159,7 @@ function clozeSources(p: Pattern, ex: ExampleMap, rng: Rng, candidates: string[]
 }
 
 function clozeQuestion(
-  kind: "prepCloze" | "connCloze" | "connInput",
+  kind: "prepCloze" | "connCloze" | "connInput" | "exprCloze" | "exprWord",
   p: Pattern,
   s: Src,
   rng: Rng,
@@ -242,6 +250,45 @@ const buildConnInput: Builder = ({ p, ex, rng }) => {
   return srcs.length ? clozeQuestion("connInput", p, pick(srcs, rng), rng, null) : null;
 };
 
+// 고정 표현의 빈칸 후보: 예문에 그대로 나오는 핵심 단어. 명사(대문자)를 우선하고, 없으면 나머지 단어를 쓴다.
+// (동사는 예문에서 활용되어 그대로 나오지 않는 경우가 많아 자연스럽게 제외된다)
+function exprSources(p: Pattern, ex: ExampleMap, rng: Rng): Src[] {
+  const words = expressionWords(p.expression!);
+  const nouns = words.filter(isUpperFirst);
+  const fromNouns = nouns.length ? clozeSources(p, ex, rng, nouns) : [];
+  return fromNouns.length ? fromNouns : clozeSources(p, ex, rng, words);
+}
+
+// 연어 오답: 다른 표현의 단어(같은 대/소문자 부류) → 명사일 때는 흔한 연어 명사. 자기 표현의 단어는 제외한다.
+function exprDistractors(p: Pattern, all: Pattern[], rng: Rng, answerForm: string, sentenceNorm: string): string[] {
+  const upper = isUpperFirst(answerForm);
+  const fromOthers = all
+    .filter((o) => o.id !== p.id && has(o.expression))
+    .flatMap((o) => expressionWords(o.expression!))
+    .filter((w) => isUpperFirst(w) === upper);
+  return takeDistractors(
+    [...shuffle(fromOthers, rng), ...(upper ? shuffle(COLLOCATION_NOUNS, rng) : [])],
+    [answerForm, ...expressionWords(p.expression!)],
+    answerForm,
+    sentenceNorm
+  );
+}
+
+const buildExprCloze: Builder = ({ p, all, ex, rng }) => {
+  if (!isExpr(p)) return null;
+  const srcs = exprSources(p, ex, rng);
+  if (!srcs.length) return null;
+  const s = pick(srcs, rng);
+  const ds = exprDistractors(p, all, rng, s.answer, norm(s.sentence));
+  return ds.length < 3 ? null : clozeQuestion("exprCloze", p, s, rng, [s.answer, ...ds]);
+};
+
+const buildExprWord: Builder = ({ p, ex, rng }) => {
+  if (!isExpr(p)) return null;
+  const srcs = exprSources(p, ex, rng);
+  return srcs.length ? clozeQuestion("exprWord", p, pick(srcs, rng), rng, null) : null;
+};
+
 // 뜻을 보고 표현 전체를 입력. 접속사의 기본 문제이자 마지막 대체 문제(어떤 유형에서도 가능)
 const buildExprInput: Builder = ({ p, ex, rng }) => ({
   kind: "exprInput",
@@ -255,12 +302,20 @@ const buildExprInput: Builder = ({ p, ex, rng }) => ({
   umlaut: true,
 });
 
+const sharesWord = (a: Pattern, b: Pattern) => {
+  if (!has(a.expression) || !has(b.expression)) return false;
+  const wa = new Set(expressionWords(a.expression).map((w) => w.toLowerCase().slice(0, 6)));
+  return expressionWords(b.expression).some((w) => wa.has(w.toLowerCase().slice(0, 6)));
+};
+
 const buildMeaningToPattern: Builder = ({ p, all, ex, rng }) => {
   const own = patternText(p);
   const others = all.filter((o) => o.id !== p.id);
   const ordered = [
     ...shuffle(others.filter((o) => has(p.verb) && has(o.verb) && norm(o.verb) === norm(p.verb)), rng),
     ...shuffle(others.filter((o) => has(p.preposition) && has(o.preposition) && norm(o.preposition) === norm(p.preposition)), rng),
+    // 고정 표현: 같은 핵심 단어를 쓰는 표현(Erfahrung sammeln ↔ Erfahrungen machen)을 먼저
+    ...shuffle(others.filter((o) => sharesWord(p, o)), rng),
     ...shuffle(others.filter((o) => typeOf(o) === typeOf(p)), rng),
     ...shuffle(others, rng),
   ];
@@ -309,8 +364,8 @@ const buildReorder: Builder = ({ p, ex, rng }) => {
   };
 };
 
-// exprInput은 접속사에서만 일반 출제하고, 다른 유형에서는 마지막 대체로만 쓴다.
-const conjOnly = (b: Builder): Builder => (c) => (isConj(c.p) ? b(c) : null);
+// exprInput은 접속사·고정 표현에서만 일반 출제하고, 다른 유형에서는 마지막 대체로만 쓴다.
+const textOnly = (b: Builder): Builder => (c) => (isConj(c.p) || isExpr(c.p) ? b(c) : null);
 
 const BUILDERS: Record<PatternKind, Builder> = {
   prepCloze: buildPrepCloze,
@@ -320,7 +375,9 @@ const BUILDERS: Record<PatternKind, Builder> = {
   reorder: buildReorder,
   connCloze: buildConnCloze,
   connInput: buildConnInput,
-  exprInput: conjOnly(buildExprInput),
+  exprInput: textOnly(buildExprInput),
+  exprCloze: buildExprCloze,
+  exprWord: buildExprWord,
 };
 const KINDS = Object.keys(BUILDERS) as PatternKind[];
 

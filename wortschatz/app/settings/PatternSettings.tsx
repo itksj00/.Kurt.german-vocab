@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { PATTERN_SELECT, patternText, typeLabel } from "@/lib/patterns";
 import { explainPatternRowFailure, parsePatternRow, patternKey } from "@/lib/patternImport";
 import { readAllRows } from "@/lib/xlsxRows";
+import { fetchAllRows } from "@/lib/supabaseFetch";
 import type { Pattern } from "@/lib/types";
 
 const TEMPLATE_HEADERS = ["유형", "앞말", "재귀", "전치사", "격", "표현", "뜻", "메모", "예문1", "예문1뜻", "예문2", "예문2뜻"];
@@ -110,6 +111,7 @@ export default function PatternSettings() {
       ["전치사", "", "", "aufgrund", "Gen.", "", "~때문에", "격식체", "Aufgrund des Regens bleiben wir zu Hause.", "비 때문에 우리는 집에 있는다.", "", ""],
       ["접속사", "", "", "", "", "sowohl … als auch …", "~뿐 아니라 ~도", "두 부분이 한 쌍", "Er spricht sowohl Deutsch als auch Englisch.", "그는 독일어도 영어도 한다.", "", ""],
       ["접속사", "", "", "", "", "obwohl", "~임에도 불구하고", "부문장: 동사가 문장 끝", "Ich gehe spazieren, obwohl es regnet.", "비가 오는데도 나는 산책한다.", "", ""],
+      ["표현", "", "", "", "", "eine wichtige Rolle spielen", "중요한 역할을 하다", "", "Die Digitalisierung spielt eine wichtige Rolle im Alltag.", "디지털화는 일상에서 중요한 역할을 한다.", "", ""],
     ]);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "patterns");
@@ -128,13 +130,11 @@ export default function PatternSettings() {
       const rows = readAllRows(wb);
 
       // 이미 있는 패턴(그리고 같은 파일 안의 반복)은 건너뛴다.
-      const { data: existing, error: exErr } = await supabase
-        .from("patterns")
-        .select("verb, reflexive, preposition, pattern_case");
-      if (exErr) throw new Error(exErr.message);
-      const seen = new Set(
-        ((existing ?? []) as unknown as Pattern[]).map((p) => patternKey(p))
+      const existing = await fetchAllRows<Pattern>(
+        "patterns",
+        "id, pattern_type, verb, reflexive, preposition, pattern_case, expression"
       );
+      const seen = new Set(existing.map((p) => patternKey(p)));
 
       let success = 0;
       let fail = 0;
@@ -234,10 +234,10 @@ export default function PatternSettings() {
       </div>
       <p className="muted" style={{ margin: "6px 0 10px" }}>
         템플릿의 열: 유형 · 앞말 · 재귀 · 전치사 · 격 · 표현 · 뜻 · 메모 · 예문1 · 예문1뜻 …
-        유형은 동사 / 명사(형용사 포함) / 전치사 / 접속사 중 하나입니다. 동사·명사는 앞말+전치사+격,
-        전치사는 전치사+격(예: aufgrund + Gen.), 접속사는 표현 칸(예: sowohl … als auch …)만 채우면 됩니다.
+        유형은 동사 / 명사(형용사 포함) / 전치사 / 접속사 / 표현(고정 표현·연어) 중 하나입니다. 동사·명사는 앞말+전치사+격,
+        전치사는 전치사+격(예: aufgrund + Gen.), 접속사와 표현은 표현 칸(예: sowohl … als auch …, eine wichtige Rolle spielen)만 채우면 됩니다.
         재귀동사는 재귀 칸에 sich를 적으세요. 열을 나누지 않고 &ldquo;패턴&rdquo; 한 칸에
-        sich auf + Akk. freuen, aufgrund + Gen. 처럼 적어도 인식합니다(접속사는 유형을 접속사로 지정).
+        sich auf + Akk. freuen, aufgrund + Gen. 처럼 적어도 인식합니다(접속사·표현은 유형 칸에 접속사/표현으로 지정).
         이미 등록된 패턴과 같은 것은 건너뜁니다. 예문 열은 몇 개든 추가할 수 있고, 시트가 여러 개면 모든 시트를 읽습니다(시트마다 첫 행이 열 이름).
       </p>
       <label style={{ marginBottom: 4 }}>엑셀 파일 선택 Excel-Datei auswählen</label>

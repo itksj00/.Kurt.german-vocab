@@ -7,6 +7,8 @@ import type { Difficulty, Gender, PerfektAux } from "@/lib/types";
 import PatternSettings from "./PatternSettings";
 import ModeTabs, { type Mode } from "../ModeTabs";
 import { readAllRows } from "@/lib/xlsxRows";
+import { wordKey, type WordIdentity } from "@/lib/wordKey";
+import { fetchAllRows } from "@/lib/supabaseFetch";
 
 const TEMPLATE_HEADERS = [
   "단어",
@@ -202,8 +204,13 @@ export default function SettingsPage() {
       // 모든 시트의 데이터 행을 읽는다 (시트 범위 정보가 잘못된 파일도 처리)
       const rows = readAllRows(wb).map((r) => r.data as Record<string, string>);
 
+      // 이미 등록된 단어와 완전히 같은 항목(단어·뜻·품사·성)은 건너뛴다. 같은 파일 안의 반복도 마찬가지.
+      const existing = await fetchAllRows<WordIdentity>("words", "id, word, meaning, part_of_speech, gender");
+      const seen = new Set(existing.map(wordKey));
+
       let successCount = 0;
       let failCount = 0;
+      let skippedCount = 0;
 
       for (const row of rows) {
         const word = String(row["단어"] ?? "").trim();
@@ -230,6 +237,17 @@ export default function SettingsPage() {
         const partizip2 = String(row["과거분사"] ?? "").trim() || null;
         const hasPerfekt = isVerb && !!aux && !!partizip2;
 
+        const key = wordKey({
+          word,
+          meaning,
+          part_of_speech: partOfSpeech,
+          gender: isNoun ? gender : null,
+        });
+        if (seen.has(key)) {
+          skippedCount++;
+          continue;
+        }
+
         const { data: inserted, error } = await supabase
           .from("words")
           .insert({
@@ -250,6 +268,7 @@ export default function SettingsPage() {
           failCount++;
           continue;
         }
+        seen.add(key);
 
         // "예문"으로 시작하고 "뜻"으로 끝나지 않는 열이 독일어 예문, "<열 이름>뜻"이 그 예문의 뜻이다.
         const sentenceKeys = Object.keys(row).filter(
@@ -270,7 +289,7 @@ export default function SettingsPage() {
 
       window.dispatchEvent(new Event("wortschatz:words-changed"));
       setMessage(
-        `가져오기 완료: 성공 ${successCount}건, 실패 ${failCount}건`
+        `가져오기 완료: 성공 ${successCount}건, 중복 건너뜀 ${skippedCount}건, 실패 ${failCount}건`
       );
     } catch (err) {
       setMessage(
@@ -348,7 +367,7 @@ export default function SettingsPage() {
             템플릿의 열: 단어 · 뜻 · 품사 · 발음 · 난이도 · 성 · 복수형 · 조동사 · 과거분사 · 예문1 · 예문1뜻 · 예문2 · 예문2뜻 · 예문3 · 예문3뜻
             (성은 der/die/das, 남성/여성/중성, 복수형으로만 쓰는 단어는 pl 또는 복수, 명사일 때만 적용됩니다. 조동사는 haben/sein, 과거분사와 함께 동사일 때만 적용됩니다. 성·복수형·조동사·과거분사·예문 칸은
             비워둬도 되고, &ldquo;예문N&rdquo; 열은 몇 개든 추가해도
-            인식됩니다.)
+            인식됩니다.) 이미 등록된 단어와 단어·뜻·품사·성이 모두 같은 항목은 건너뜁니다(철자가 같아도 뜻이나 성이 다르면 추가됩니다).
           </p>
           <label style={{ marginBottom: 4 }}>엑셀 파일 선택 Excel-Datei auswählen</label>
           <input

@@ -28,6 +28,7 @@ const TYPE_ALIASES: Record<string, PatternType> = {
   명사: "noun", 형용사: "noun", 명사구: "noun", "명사/형용사": "noun", "명사·형용사": "noun", noun: "noun", adj: "noun", adjektiv: "noun", nomen: "noun",
   전치사: "prep", prep: "prep", präposition: "prep",
   접속사: "conj", 연결: "conj", 연결표현: "conj", conj: "conj", konjunktion: "conj", konnektor: "conj",
+  표현: "expr", 관용구: "expr", 연어: "expr", 숙어: "expr", 고정표현: "expr", 관용표현: "expr", expr: "expr", redewendung: "expr", kollokation: "expr", wendung: "expr",
 };
 
 const TRUE_WORDS = new Set(["o", "y", "yes", "true", "1", "x", "v", "✓", "sich", "재귀", "예"]);
@@ -120,23 +121,26 @@ export function parsePatternRow(row: Record<string, unknown>): ParsedPatternRow 
   let fields: PatternFields | null = null;
   let expression: string | null = null;
 
-  const asConj = (e: string) => {
+  // 접속사·고정 표현: 표현 문자열 하나만 쓰고 동사/전치사/격 칸은 비운다.
+  const asText = (type: "conj" | "expr", e: string) => {
     expression = e;
-    fields = { pattern_type: "conj", verb: null, reflexive: false, preposition: null, pattern_case: null };
+    fields = { pattern_type: type, verb: null, reflexive: false, preposition: null, pattern_case: null };
   };
 
-  if (declared === "conj") {
+  if (declared === "conj" || declared === "expr") {
     const e = expressionCol || text;
-    if (e) asConj(e);
+    if (e) asText(declared, e);
   } else if (declared) {
     fields = text ? parsePatternText(text) : fromColumns(declared, row);
     if (fields && declared !== "prep") fields = { ...fields, pattern_type: declared, reflexive: declared === "verb" && fields.reflexive };
     if (fields && declared === "prep" && fields.pattern_type !== "prep") fields = null;
   } else if (text) {
     fields = parsePatternText(text);
-    if (!fields && ELLIPSIS.test(text)) asConj(text);
+    if (!fields && ELLIPSIS.test(text)) asText("conj", text);
   } else if (expressionCol) {
-    asConj(expressionCol);
+    // 유형 생략: 한 단어이거나 … 가 있으면 접속사, 여러 단어의 문구는 고정 표현
+    const words = expressionCol.split(/\s+/).length;
+    asText(words >= 2 && !ELLIPSIS.test(expressionCol) ? "expr" : "conj", expressionCol);
   } else {
     fields = fromColumns("verb", row) ?? fromColumns("prep", row);
   }
@@ -156,12 +160,12 @@ export function explainPatternRowFailure(row: Record<string, unknown>): string {
   if (!str(row["뜻"])) return "뜻이 비어 있음";
   const typeCol = str(row["유형"]);
   if (typeCol && !parseType(typeCol)) {
-    return `알 수 없는 유형: "${typeCol}" (동사 / 명사 / 전치사 / 접속사 중 하나)`;
+    return `알 수 없는 유형: "${typeCol}" (동사 / 명사 / 전치사 / 접속사 / 표현 중 하나)`;
   }
   const declared = typeCol ? parseType(typeCol) : null;
-  if (declared === "conj") return "표현 칸(또는 패턴 칸)이 비어 있음";
+  if (declared === "conj" || declared === "expr") return "표현 칸(또는 패턴 칸)이 비어 있음";
   const text = str(row["패턴"]);
-  if (text) return `패턴을 해석하지 못함: "${text}" (접속사는 유형 열에 접속사로 적거나 표현 칸을 쓰세요)`;
+  if (text) return `패턴을 해석하지 못함: "${text}" (접속사·고정 표현은 유형 열에 접속사/표현으로 적거나 표현 칸을 쓰세요)`;
   if (declared === "prep") return "전치사/격 칸이 비어 있음";
-  return "필수 칸이 비어 있음 (동사·명사=앞말+전치사+격, 전치사=전치사+격, 접속사=표현)";
+  return "필수 칸이 비어 있음 (동사·명사=앞말+전치사+격, 전치사=전치사+격, 접속사·표현=표현)";
 }

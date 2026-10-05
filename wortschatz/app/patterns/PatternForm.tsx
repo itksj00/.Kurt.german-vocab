@@ -71,6 +71,8 @@ export default function PatternForm({ patternId }: { patternId?: number }) {
     setExamples((prev) => prev.map((ex, idx) => (idx === i ? { ...ex, [field]: value } : ex)));
   }
 
+  const textType = type === "conj" || type === "expr"; // 표현 문자열 하나만 쓰는 유형
+
   // 유형에 맞게 정리한 저장값. 쓰지 않는 칸은 null.
   function buildPayload() {
     let cleanHead = head.trim();
@@ -79,14 +81,14 @@ export default function PatternForm({ patternId }: { patternId?: number }) {
       cleanHead = cleanHead.replace(/^sich\s+/i, "");
       isReflexive = true;
     }
-    const usesPrep = type !== "conj";
+    const usesPrep = !textType;
     return {
       pattern_type: type,
       verb: type === "verb" || type === "noun" ? cleanHead : null,
       reflexive: isReflexive,
       preposition: usesPrep ? preposition.trim() : null,
       pattern_case: usesPrep ? patternCase : null,
-      expression: type === "conj" ? expression.trim() : null,
+      expression: textType ? expression.trim() : null,
       note: note.trim() || null,
       meaning: meaning.trim(),
     };
@@ -98,8 +100,8 @@ export default function PatternForm({ patternId }: { patternId?: number }) {
     const payload = buildPayload();
 
     if (!payload.meaning) return setErrorMsg("뜻은 필수입니다.");
-    if (type === "conj" && !payload.expression) return setErrorMsg("표현은 필수입니다.");
-    if (type !== "conj" && !payload.preposition) return setErrorMsg("전치사는 필수입니다.");
+    if (textType && !payload.expression) return setErrorMsg("표현은 필수입니다.");
+    if (!textType && !payload.preposition) return setErrorMsg("전치사는 필수입니다.");
     if ((type === "verb" || type === "noun") && !payload.verb) {
       return setErrorMsg(type === "verb" ? "동사는 필수입니다." : "명사/형용사는 필수입니다.");
     }
@@ -157,8 +159,7 @@ export default function PatternForm({ patternId }: { patternId?: number }) {
   if (loading) return <p className="muted">불러오는 중... Lädt...</p>;
 
   const p = buildPayload();
-  const ready =
-    type === "conj" ? !!p.expression : !!p.preposition && (type === "prep" || !!p.verb);
+  const ready = textType ? !!p.expression : !!p.preposition && (type === "prep" || !!p.verb);
   const preview = ready ? patternText(p) : null;
   const prepList = type === "prep" ? [...GEN_PREPS, ...COMMON_PREPS] : COMMON_PREPS;
 
@@ -203,7 +204,7 @@ export default function PatternForm({ patternId }: { patternId?: number }) {
         </div>
       )}
 
-      {type !== "conj" && (
+      {!textType && (
         <div className="row" style={{ marginTop: 8 }}>
           <div className="field">
             <label>전치사 Präposition</label>
@@ -235,15 +236,23 @@ export default function PatternForm({ patternId }: { patternId?: number }) {
         </div>
       )}
 
-      {type === "conj" && (
+      {textType && (
         <div className="field" style={{ marginTop: 8 }}>
           <label>표현 Ausdruck</label>
           <input
             value={expression}
             onChange={(e) => setExpression(e.target.value)}
-            placeholder="예: sowohl … als auch …, obwohl, wenn"
+            placeholder={
+              type === "conj"
+                ? "예: sowohl … als auch …, obwohl, wenn"
+                : "예: eine wichtige Rolle spielen, es geht um …"
+            }
           />
-          <small className="muted">두 부분으로 이뤄진 표현은 … 로 나눠 적으면 연결어별로 퀴즈가 만들어집니다.</small>
+          <small className="muted">
+            {type === "conj"
+              ? "두 부분으로 이뤄진 표현은 … 로 나눠 적으면 연결어별로 퀴즈가 만들어집니다."
+              : "동사는 원형으로 적고, 뒤에 이어지는 문장이 있으면 … 로 표시하세요. 예문에 핵심 단어가 그대로 들어 있으면 빈칸 문제가 만들어집니다."}
+          </small>
         </div>
       )}
 

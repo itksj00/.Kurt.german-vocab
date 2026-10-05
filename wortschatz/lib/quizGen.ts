@@ -22,7 +22,9 @@ export type PKind =
   | "meaningToPattern"
   | "connCloze"
   | "connInput"
-  | "exprInput";
+  | "exprInput"
+  | "exprCloze"
+  | "exprWord";
 
 export type QFormat = "choice" | "input" | "reorder";
 
@@ -422,10 +424,10 @@ export function hasExamples(w: { id: number }, ex: ExampleMap): boolean {
 }
 
 // 정오답 판정. reorder/choice/input 모두 문자열 하나로 비교한다.
-// exprInput(표현 전체 입력)은 "…", "...", "~" 같은 생략 표시를 무시하고 비교한다.
+// exprInput(표현 전체 입력)은 "…", "...", "~"와 쉼표 같은 구두점을 무시하고 비교한다.
 export function isCorrect(q: Question, input: string): boolean {
   const clean = (v: string) =>
-    norm(q.kind === "exprInput" ? v.replace(/…|\.{3}|~/g, " ") : v);
+    norm(q.kind === "exprInput" ? v.replace(/…|\.{3}|~|[,;.!?]/g, " ") : v);
   const given = clean(input);
   if (!given) return false;
   return [q.answer, ...(q.accept ?? [])].some((a) => clean(a) === given);

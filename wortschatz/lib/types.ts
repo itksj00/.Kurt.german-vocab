@@ -28,8 +28,8 @@ export type Word = {
 // 동사 + 전치사 + 격 패턴 (예: sich auf + Akk. freuen)
 export type PatternCase = "Akk" | "Dat" | "Gen";
 
-// verb: 동사 + 전치사 + 격 / noun: 명사·형용사 + 전치사 + 격 / prep: 전치사 + 격만 / conj: 접속사·연결 표현
-export type PatternType = "verb" | "noun" | "prep" | "conj";
+// verb: 동사 + 전치사 + 격 / noun: 명사·형용사 + 전치사 + 격 / prep: 전치사 + 격만 / conj: 접속사·연결 표현 / expr: 고정 표현·연어
+export type PatternType = "verb" | "noun" | "prep" | "conj" | "expr";
 
 export type Pattern = {
   id: number;
