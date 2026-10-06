@@ -12,6 +12,7 @@ const TABS = [
   { href: "/patterns", ko: "패턴 목록", de: "Musterliste" },
   { href: "/patterns/add", ko: "패턴 추가", de: "Muster hinzufügen" },
   { href: "/quiz", ko: "퀴즈", de: "Quiz" },
+  { href: "/memo", ko: "독독독 오늘의 암기", de: "Auswendig lernen" },
   { href: "/review", ko: "복습항목", de: "Wiederholung" },
   { href: "/settings", ko: "설정", de: "Einstellungen" },
 ];

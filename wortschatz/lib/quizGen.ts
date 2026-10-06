@@ -26,10 +26,13 @@ export type PKind =
   | "exprCloze"
   | "exprWord";
 
+// 토탈 테스트의 독독독 문장 문제 (lib/totalQuiz.ts)
+export type MKind = "memoCloze" | "memoFull";
+
 export type QFormat = "choice" | "input" | "reorder";
 
 export type Question = {
-  kind: QKind | PKind;
+  kind: QKind | PKind | MKind;
   wordId: number; // 단어 또는 패턴의 id
   format: QFormat;
   label: string; // 유형 라벨 (한/독 병기)
@@ -424,10 +427,10 @@ export function hasExamples(w: { id: number }, ex: ExampleMap): boolean {
 }
 
 // 정오답 판정. reorder/choice/input 모두 문자열 하나로 비교한다.
-// exprInput(표현 전체 입력)은 "…", "...", "~"와 쉼표 같은 구두점을 무시하고 비교한다.
+// exprInput(표현 전체 입력), memoFull(문장 전체 입력)은 "…", "...", "~"와 구두점을 무시하고 비교한다.
 export function isCorrect(q: Question, input: string): boolean {
-  const clean = (v: string) =>
-    norm(q.kind === "exprInput" ? v.replace(/…|\.{3}|~|[,;.!?]/g, " ") : v);
+  const loose = q.kind === "exprInput" || q.kind === "memoFull";
+  const clean = (v: string) => norm(loose ? v.replace(/…|\.{3}|~|[,;:.!?„“”"]/g, " ") : v);
   const given = clean(input);
   if (!given) return false;
   return [q.answer, ...(q.accept ?? [])].some((a) => clean(a) === given);

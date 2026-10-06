@@ -19,7 +19,7 @@ type Item = Word | Pattern;
 type Done = { word: Item; result: SortResult };
 
 const WORD_COLS: string =
-  "id, word, meaning, part_of_speech, pronunciation, difficulty, gender, plural, perfekt_aux, partizip2, wrong_count, review_stage, next_review_at, last_studied_at, created_at, sorted_at, sort_result";
+  "id, word, meaning, part_of_speech, pronunciation, difficulty, gender, plural, perfekt_aux, partizip2, wrong_count, review_stage, next_review_at, last_studied_at, created_at, sorted_at, sort_result, mnemonic";
 
 export default function SortPage() {
   // /sort#pattern 으로 들어오면 패턴 탭으로 시작한다. (로딩 화면에는 탭이 없어 서버 렌더와 어긋나지 않는다)
@@ -247,7 +247,14 @@ export default function SortPage() {
                 {"verb" in w ? patternText(w) : withArticle(w)}
               </div>
               {flipped ? (
-                <div style={{ fontSize: "1.05rem" }}>{w.meaning}</div>
+                <div style={{ fontSize: "1.05rem" }}>
+                  {w.meaning}
+                  {!("verb" in w) && w.mnemonic && (
+                    <div className="muted" style={{ fontSize: "0.82rem", marginTop: 4 }}>
+                      💡 {w.mnemonic}
+                    </div>
+                  )}
+                </div>
               ) : (
                 <div className="muted" style={{ fontSize: "0.82rem" }}>
                   탭하면 뜻 보기 Tippen für Bedeutung

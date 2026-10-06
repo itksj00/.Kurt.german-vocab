@@ -23,6 +23,7 @@ export type Word = {
   created_at: string;
   sorted_at: string | null; // null = 아직 분류하지 않은 새 단어
   sort_result: "known" | "unknown" | null;
+  mnemonic: string | null; // 암기 팁 (어원, 쉽게 외우는 법) 한 줄
 };
 
 // 동사 + 전치사 + 격 패턴 (예: sich auf + Akk. freuen)

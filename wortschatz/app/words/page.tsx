@@ -34,7 +34,7 @@ export default function WordsPage() {
       const { data, error } = await supabase
         .from("words")
         .select(
-          "id, word, meaning, part_of_speech, pronunciation, difficulty, gender, plural, perfekt_aux, partizip2, wrong_count, review_stage, next_review_at, last_studied_at, created_at, sorted_at, sort_result"
+          "id, word, meaning, part_of_speech, pronunciation, difficulty, gender, plural, perfekt_aux, partizip2, wrong_count, review_stage, next_review_at, last_studied_at, created_at, sorted_at, sort_result, mnemonic"
         )
         .order("word", { ascending: true });
       if (!active) return;
@@ -76,7 +76,8 @@ export default function WordsPage() {
       list = list.filter(
         (w) =>
           w.word.toLowerCase().includes(q) ||
-          w.meaning.toLowerCase().includes(q)
+          w.meaning.toLowerCase().includes(q) ||
+          (w.mnemonic ?? "").toLowerCase().includes(q)
       );
     } else if (selectedLetter) {
       list = list.filter(
@@ -250,6 +251,11 @@ export default function WordsPage() {
                               ? ` · 틀림 ${w.wrong_count}회`
                               : ""}
                           </small>
+                          {w.mnemonic && (
+                            <small style={{ display: "block", marginTop: 2 }}>
+                              💡 {w.mnemonic}
+                            </small>
+                          )}
                         </div>
                       </div>
                       <span className="badge">
