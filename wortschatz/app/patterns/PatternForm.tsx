@@ -22,6 +22,7 @@ export default function PatternForm({ patternId }: { patternId?: number }) {
     { sentence: "", translation: "" },
   ]);
 
+  const [legacyExtras, setLegacyExtras] = useState(false); // 예문·메모가 이미 있는 고정 표현
   const [loading, setLoading] = useState(isEdit);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -59,6 +60,7 @@ export default function PatternForm({ patternId }: { patternId?: number }) {
         translation: (r.translation as string | null) ?? "",
       }));
       setExamples(loaded.length > 0 ? loaded : [{ sentence: "", translation: "" }]);
+      setLegacyExtras(loaded.some((x) => x.sentence.trim()) || !!(row.note ?? "").trim());
       setLoading(false);
     }
     load();
@@ -72,6 +74,8 @@ export default function PatternForm({ patternId }: { patternId?: number }) {
   }
 
   const textType = type === "conj" || type === "expr"; // 표현 문자열 하나만 쓰는 유형
+  // 고정 표현은 독독독처럼 문장 + 뜻만 입력한다. (이미 예문·메모가 있는 항목은 그대로 보여 준다)
+  const simpleExpr = type === "expr" && !legacyExtras;
 
   // 유형에 맞게 정리한 저장값. 쓰지 않는 칸은 null.
   function buildPayload() {
@@ -89,7 +93,7 @@ export default function PatternForm({ patternId }: { patternId?: number }) {
       preposition: usesPrep ? preposition.trim() : null,
       pattern_case: usesPrep ? patternCase : null,
       expression: textType ? expression.trim() : null,
-      note: note.trim() || null,
+      note: simpleExpr ? null : note.trim() || null,
       meaning: meaning.trim(),
     };
   }
@@ -100,14 +104,16 @@ export default function PatternForm({ patternId }: { patternId?: number }) {
     const payload = buildPayload();
 
     if (!payload.meaning) return setErrorMsg("뜻은 필수입니다.");
-    if (textType && !payload.expression) return setErrorMsg("표현은 필수입니다.");
+    if (textType && !payload.expression) {
+      return setErrorMsg(type === "expr" ? "문장은 필수입니다." : "표현은 필수입니다.");
+    }
     if (!textType && !payload.preposition) return setErrorMsg("전치사는 필수입니다.");
     if ((type === "verb" || type === "noun") && !payload.verb) {
       return setErrorMsg(type === "verb" ? "동사는 필수입니다." : "명사/형용사는 필수입니다.");
     }
 
     setSaving(true);
-    const cleanExamples = examples
+    const cleanExamples = (simpleExpr ? [] : examples)
       .map((ex) => ({ sentence: ex.sentence.trim(), translation: ex.translation.trim() }))
       .filter((ex) => ex.sentence);
 
@@ -160,7 +166,7 @@ export default function PatternForm({ patternId }: { patternId?: number }) {
 
   const p = buildPayload();
   const ready = textType ? !!p.expression : !!p.preposition && (type === "prep" || !!p.verb);
-  const preview = ready ? patternText(p) : null;
+  const preview = ready && type !== "expr" ? patternText(p) : null;
   const prepList = type === "prep" ? [...GEN_PREPS, ...COMMON_PREPS] : COMMON_PREPS;
 
   return (
@@ -236,23 +242,38 @@ export default function PatternForm({ patternId }: { patternId?: number }) {
         </div>
       )}
 
-      {textType && (
+      {type === "conj" && (
         <div className="field" style={{ marginTop: 8 }}>
           <label>표현 Ausdruck</label>
           <input
             value={expression}
             onChange={(e) => setExpression(e.target.value)}
-            placeholder={
-              type === "conj"
-                ? "예: sowohl … als auch …, obwohl, wenn"
-                : "예: eine wichtige Rolle spielen, es geht um …"
-            }
+            placeholder="예: sowohl … als auch …, obwohl, wenn"
           />
           <small className="muted">
-            {type === "conj"
-              ? "두 부분으로 이뤄진 표현은 … 로 나눠 적으면 연결어별로 퀴즈가 만들어집니다."
-              : "동사는 원형으로 적고, 뒤에 이어지는 문장이 있으면 … 로 표시하세요. 예문에 핵심 단어가 그대로 들어 있으면 빈칸 문제가 만들어집니다."}
+            두 부분으로 이뤄진 표현은 … 로 나눠 적으면 연결어별로 퀴즈가 만들어집니다.
           </small>
+        </div>
+      )}
+
+      {type === "expr" && (
+        <div className="field" style={{ marginTop: 8 }}>
+          <label>{legacyExtras ? "표현 Ausdruck" : "문장 Satz"}</label>
+          <textarea
+            rows={2}
+            value={expression}
+            onChange={(e) => setExpression(e.target.value)}
+            placeholder={
+              legacyExtras
+                ? "예: eine wichtige Rolle spielen, es geht um …"
+                : "예: Die Digitalisierung spielt eine wichtige Rolle im Alltag."
+            }
+          />
+          {!legacyExtras && (
+            <small className="muted">
+              문장 통째로 적으면 빈칸·문장 입력·문장 배열 문제가 만들어집니다.
+            </small>
+          )}
         </div>
       )}
 
@@ -261,18 +282,20 @@ export default function PatternForm({ patternId }: { patternId?: number }) {
         <input
           value={meaning}
           onChange={(e) => setMeaning(e.target.value)}
-          placeholder="예: ~을 기대하다"
+          placeholder={simpleExpr ? "예: 디지털화는 일상에서 중요한 역할을 한다." : "예: ~을 기대하다"}
         />
       </div>
 
-      <div className="field" style={{ marginTop: 8 }}>
-        <label>메모 (선택) Notiz</label>
-        <input
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-          placeholder="예: 부문장, 동사는 문장 끝 / 분리동사"
-        />
-      </div>
+      {!simpleExpr && (
+        <div className="field" style={{ marginTop: 8 }}>
+          <label>메모 (선택) Notiz</label>
+          <input
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder="예: 부문장, 동사는 문장 끝 / 분리동사"
+          />
+        </div>
+      )}
 
       {preview && (
         <p className="muted" style={{ marginTop: 10 }}>
@@ -280,8 +303,8 @@ export default function PatternForm({ patternId }: { patternId?: number }) {
         </p>
       )}
 
-      <div className="section-title">예문 (여러 개 추가 가능) Beispielsätze</div>
-      {examples.map((ex, i) => (
+      {!simpleExpr && <div className="section-title">예문 (여러 개 추가 가능) Beispielsätze</div>}
+      {!simpleExpr && examples.map((ex, i) => (
         <div className="ex-item" key={i} style={{ alignItems: "flex-start" }}>
           <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 6 }}>
             <input
@@ -306,13 +329,15 @@ export default function PatternForm({ patternId }: { patternId?: number }) {
           )}
         </div>
       ))}
-      <button
-        type="button"
-        className="btn ghost small"
-        onClick={() => setExamples((prev) => [...prev, { sentence: "", translation: "" }])}
-      >
-        + 예문 추가 Beispiel hinzufügen
-      </button>
+      {!simpleExpr && (
+        <button
+          type="button"
+          className="btn ghost small"
+          onClick={() => setExamples((prev) => [...prev, { sentence: "", translation: "" }])}
+        >
+          + 예문 추가 Beispiel hinzufügen
+        </button>
+      )}
 
       {errorMsg && (
         <p className="muted" style={{ color: "var(--danger)", marginTop: 10 }}>

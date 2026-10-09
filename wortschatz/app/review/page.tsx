@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { supabase } from "@/lib/supabaseClient";
+import { fetchAllRows } from "@/lib/supabaseFetch";
 import { REVIEW_INTERVALS_DAYS, isDue } from "@/lib/srs";
 import { withArticle } from "@/lib/wordDisplay";
 import type { Gender, Pattern } from "@/lib/types";
@@ -51,13 +51,16 @@ export default function ReviewPage() {
       let data: Row[] | null = null;
       let errMsg: string | null = null;
       if (mode === "pattern") {
-        const res = await supabase
-          .from("patterns")
-          .select(PATTERN_SELECT)
-          .not("sorted_at", "is", null)
-          .order("next_review_at", { ascending: true });
-        errMsg = res.error?.message ?? null;
-        data = ((res.data ?? []) as unknown as Pattern[]).map((p) => ({
+        let list: Pattern[] = [];
+        try {
+          list = await fetchAllRows<Pattern>("patterns", PATTERN_SELECT, {
+            sorted: "done",
+            order: { column: "next_review_at" },
+          });
+        } catch (e) {
+          errMsg = e instanceof Error ? e.message : String(e);
+        }
+        data = list.map((p) => ({
           id: p.id,
           label: patternText(p),
           meaning: p.meaning,
@@ -65,13 +68,17 @@ export default function ReviewPage() {
           next_review_at: p.next_review_at,
         }));
       } else {
-        const res = await supabase
-          .from("words")
-          .select("id, word, meaning, gender, review_stage, next_review_at")
-          .not("sorted_at", "is", null)
-          .order("next_review_at", { ascending: true });
-        errMsg = res.error?.message ?? null;
-        data = ((res.data ?? []) as unknown as WordRow[]).map((w) => ({
+        let list: WordRow[] = [];
+        try {
+          list = await fetchAllRows<WordRow>(
+            "words",
+            "id, word, meaning, gender, review_stage, next_review_at",
+            { sorted: "done", order: { column: "next_review_at" } }
+          );
+        } catch (e) {
+          errMsg = e instanceof Error ? e.message : String(e);
+        }
+        data = list.map((w) => ({
           id: w.id,
           label: withArticle(w),
           meaning: w.meaning,

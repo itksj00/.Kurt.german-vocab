@@ -111,7 +111,7 @@ export default function PatternSettings() {
       ["전치사", "", "", "aufgrund", "Gen.", "", "~때문에", "격식체", "Aufgrund des Regens bleiben wir zu Hause.", "비 때문에 우리는 집에 있는다.", "", ""],
       ["접속사", "", "", "", "", "sowohl … als auch …", "~뿐 아니라 ~도", "두 부분이 한 쌍", "Er spricht sowohl Deutsch als auch Englisch.", "그는 독일어도 영어도 한다.", "", ""],
       ["접속사", "", "", "", "", "obwohl", "~임에도 불구하고", "부문장: 동사가 문장 끝", "Ich gehe spazieren, obwohl es regnet.", "비가 오는데도 나는 산책한다.", "", ""],
-      ["표현", "", "", "", "", "eine wichtige Rolle spielen", "중요한 역할을 하다", "", "Die Digitalisierung spielt eine wichtige Rolle im Alltag.", "디지털화는 일상에서 중요한 역할을 한다.", "", ""],
+      ["표현", "", "", "", "", "Die Digitalisierung spielt eine wichtige Rolle im Alltag.", "디지털화는 일상에서 중요한 역할을 한다.", "", "", "", "", ""],
     ]);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "patterns");

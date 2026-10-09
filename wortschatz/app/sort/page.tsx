@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
+import { fetchAllRows } from "@/lib/supabaseFetch";
 import type { Pattern, Word } from "@/lib/types";
 import { posLabel, withArticle } from "@/lib/wordDisplay";
 import { PATTERN_SELECT, patternText } from "@/lib/patterns";
@@ -45,16 +46,18 @@ export default function SortPage() {
     async function load() {
       const otherTable = table === "words" ? "patterns" : "words";
       const [res, other] = await Promise.all([
-        supabase
-          .from(table)
-          .select(table === "words" ? WORD_COLS : PATTERN_SELECT)
-          .is("sorted_at", null)
-          .order("created_at", { ascending: true }),
+        fetchAllRows<Item>(table, table === "words" ? WORD_COLS : PATTERN_SELECT, {
+          sorted: "pending",
+          order: { column: "created_at" },
+        }).then(
+          (data) => ({ data, error: null as string | null }),
+          (e: unknown) => ({ data: [] as Item[], error: e instanceof Error ? e.message : String(e) })
+        ),
         supabase.from(otherTable).select("id", { count: "exact", head: true }).is("sorted_at", null),
       ]);
       if (!active) return;
-      if (res.error) setError(res.error.message);
-      else setQueue((res.data ?? []) as unknown as Item[]);
+      if (res.error) setError(res.error);
+      else setQueue(res.data);
       setOtherCount(other.error ? 0 : (other.count ?? 0));
       setLoading(false);
     }
