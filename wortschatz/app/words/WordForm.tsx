@@ -32,6 +32,7 @@ export default function WordForm({ wordId }: { wordId?: number }) {
   const [hasPerfekt, setHasPerfekt] = useState(false);
   const [perfektAux, setPerfektAux] = useState<PerfektAux>("haben");
   const [partizip2, setPartizip2] = useState("");
+  const [mnemonic, setMnemonic] = useState("");
   const [examples, setExamples] = useState<{ sentence: string; translation: string }[]>([
     { sentence: "", translation: "" },
   ]);
@@ -72,6 +73,7 @@ export default function WordForm({ wordId }: { wordId?: number }) {
       setHasPerfekt(!!wordRow.partizip2);
       setPerfektAux((wordRow.perfekt_aux as PerfektAux | null) ?? "haben");
       setPartizip2(wordRow.partizip2 ?? "");
+      setMnemonic(wordRow.mnemonic ?? "");
       const loaded = (exampleRows ?? []).map((r) => ({
         sentence: r.sentence as string,
         translation: (r.translation as string | null) ?? "",
@@ -141,6 +143,7 @@ export default function WordForm({ wordId }: { wordId?: number }) {
       plural: isNoun && hasPlural && gender !== "pl" ? plural.trim() : null,
       perfekt_aux: isVerb && hasPerfekt ? perfektAux : null,
       partizip2: isVerb && hasPerfekt ? partizip2.trim() : null,
+      mnemonic: mnemonic.trim() || null,
     };
 
     try {
@@ -336,6 +339,15 @@ export default function WordForm({ wordId }: { wordId?: number }) {
           )}
         </div>
       )}
+
+      <div className="field" style={{ marginTop: 8 }}>
+        <label>암기 팁 (선택) Eselsbrücke — 어원, 쉽게 외우는 법 한 줄</label>
+        <input
+          value={mnemonic}
+          onChange={(e) => setMnemonic(e.target.value)}
+          placeholder="예: Freiheit = frei(자유로운) + -heit(~함)"
+        />
+      </div>
 
       <div className="section-title">예문 (여러 개 추가 가능) Beispielsätze</div>
       {examples.map((ex, i) => (

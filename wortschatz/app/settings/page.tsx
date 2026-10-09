@@ -20,6 +20,7 @@ const TEMPLATE_HEADERS = [
   "복수형",
   "조동사",
   "과거분사",
+  "암기팁",
   "예문1",
   "예문1뜻",
   "예문2",
@@ -69,6 +70,7 @@ type FullWord = {
   plural: string | null;
   perfekt_aux: string | null;
   partizip2: string | null;
+  mnemonic: string | null;
   wrong_count: number;
   examples: { sentence: string; translation: string | null }[];
 };
@@ -84,7 +86,7 @@ export default function SettingsPage() {
     const { data: words, error } = await supabase
       .from("words")
       .select(
-        "id, word, meaning, part_of_speech, pronunciation, difficulty, gender, plural, perfekt_aux, partizip2, wrong_count"
+        "id, word, meaning, part_of_speech, pronunciation, difficulty, gender, plural, perfekt_aux, partizip2, mnemonic, wrong_count"
       )
       .order("word", { ascending: true });
     if (error) throw error;
@@ -103,6 +105,7 @@ export default function SettingsPage() {
       plural: w.plural,
       perfekt_aux: w.perfekt_aux,
       partizip2: w.partizip2,
+      mnemonic: w.mnemonic,
       wrong_count: w.wrong_count,
       examples: (examples ?? []).filter((e) => e.word_id === w.id),
     }));
@@ -123,6 +126,7 @@ export default function SettingsPage() {
         "복수형",
         "조동사",
         "과거분사",
+        "암기팁",
         "틀린횟수",
         "예문",
         "예문뜻",
@@ -143,6 +147,7 @@ export default function SettingsPage() {
           r.plural ?? "",
           r.perfekt_aux ?? "",
           r.partizip2 ?? "",
+          r.mnemonic ?? "",
           String(r.wrong_count),
           examplesJoined,
           translationsJoined,
@@ -181,7 +186,7 @@ export default function SettingsPage() {
   function handleDownloadTemplate() {
     const ws = XLSX.utils.aoa_to_sheet([
       TEMPLATE_HEADERS,
-      ["Freiheit", "자유", "명사", "ˈfʁaɪhaɪt", "B1", "die", "Freiheiten", "", "", "Freiheit ist wichtig.", "자유는 중요하다.", "", "", "", ""],
+      ["Freiheit", "자유", "명사", "ˈfʁaɪhaɪt", "B1", "die", "Freiheiten", "", "", "frei(자유로운) + -heit(~함)", "Freiheit ist wichtig.", "자유는 중요하다.", "", "", "", ""],
     ]);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "words");
@@ -235,6 +240,7 @@ export default function SettingsPage() {
         const aux =
           AUX_ALIASES[String(row["조동사"] ?? "").trim().toLowerCase()] ?? null;
         const partizip2 = String(row["과거분사"] ?? "").trim() || null;
+        const mnemonic = String(row["암기팁"] ?? "").trim() || null;
         const hasPerfekt = isVerb && !!aux && !!partizip2;
 
         const key = wordKey({
@@ -260,6 +266,7 @@ export default function SettingsPage() {
             plural: isNoun && gender !== "pl" ? plural : null,
             perfekt_aux: hasPerfekt ? aux : null,
             partizip2: hasPerfekt ? partizip2 : null,
+            mnemonic,
           })
           .select("id")
           .single();
@@ -364,8 +371,8 @@ export default function SettingsPage() {
             </button>
           </div>
           <p className="muted" style={{ margin: "6px 0 10px" }}>
-            템플릿의 열: 단어 · 뜻 · 품사 · 발음 · 난이도 · 성 · 복수형 · 조동사 · 과거분사 · 예문1 · 예문1뜻 · 예문2 · 예문2뜻 · 예문3 · 예문3뜻
-            (성은 der/die/das, 남성/여성/중성, 복수형으로만 쓰는 단어는 pl 또는 복수, 명사일 때만 적용됩니다. 조동사는 haben/sein, 과거분사와 함께 동사일 때만 적용됩니다. 성·복수형·조동사·과거분사·예문 칸은
+            템플릿의 열: 단어 · 뜻 · 품사 · 발음 · 난이도 · 성 · 복수형 · 조동사 · 과거분사 · 암기팁 · 예문1 · 예문1뜻 · 예문2 · 예문2뜻 · 예문3 · 예문3뜻
+            (성은 der/die/das, 남성/여성/중성, 복수형으로만 쓰는 단어는 pl 또는 복수, 명사일 때만 적용됩니다. 조동사는 haben/sein, 과거분사와 함께 동사일 때만 적용됩니다. 성·복수형·조동사·과거분사·암기팁·예문 칸은
             비워둬도 되고, &ldquo;예문N&rdquo; 열은 몇 개든 추가해도
             인식됩니다.) 이미 등록된 단어와 단어·뜻·품사·성이 모두 같은 항목은 건너뜁니다(철자가 같아도 뜻이나 성이 다르면 추가됩니다).
           </p>
