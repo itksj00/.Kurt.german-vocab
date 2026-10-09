@@ -5,6 +5,7 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import { fetchAllRows } from "@/lib/supabaseFetch";
 import { useEnterAdvance } from "./useEnterAdvance";
+import AnswerCompare from "./AnswerCompare";
 import type { Difficulty, Pattern, Word } from "@/lib/types";
 import { isDue, nextSchedule } from "@/lib/srs";
 import {
@@ -74,7 +75,8 @@ export default function QuizRunner({ lockedScope, onStageChange, mode = "word" }
   const [checked, setChecked] = useState(false);
   const [correct, setCorrect] = useState(false);
   const [capsHint, setCapsHint] = useState(false); // 철자는 맞고 명사 대문자만 빠뜨려 틀림
-  const inputRef = useRef<HTMLInputElement>(null);
+  const [givenText, setGivenText] = useState(""); // 채점한 내 답 (틀렸을 때 정답과 나란히 보여 주기 위함)
+  const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
 
   const finalizedRef = useRef(false);
 
@@ -147,6 +149,7 @@ export default function QuizRunner({ lockedScope, onStageChange, mode = "word" }
     setChecked(false);
     setCorrect(false);
     setCapsHint(false);
+    setGivenText("");
   }
 
   function startQuiz() {
@@ -192,6 +195,7 @@ export default function QuizRunner({ lockedScope, onStageChange, mode = "word" }
     setChecked(true);
     setCorrect(isCorrect(question, given));
     setCapsHint(isCapsMistake(question, given));
+    setGivenText(given);
   }
 
   function handleChoice(opt: string) {
@@ -336,11 +340,14 @@ export default function QuizRunner({ lockedScope, onStageChange, mode = "word" }
 
   if (stage === "playing" && question) {
     const q = question;
+    // 입력·배열 문제를 틀리면 "내가 쓴 답 / 정답"을 나란히 보여 주므로 상태 줄에는 정답을 따로 쓰지 않는다
+    const showCompare = checked && !correct && q.format !== "choice";
+    const capsLine = capsHint ? "\n명사는 첫 글자를 대문자로 써야 해요 Nomen großschreiben" : "";
     const status = checked
       ? correct
         ? { text: "정답! Richtig!", color: "var(--accent)" }
         : {
-            text: `오답 Falsch — 정답 Lösung: ${q.answer}${capsHint ? "\n명사는 첫 글자를 대문자로 써야 해요 Nomen großschreiben" : ""}`,
+            text: showCompare ? `오답 Falsch${capsLine}` : `오답 Falsch — 정답 Lösung: ${q.answer}${capsLine}`,
             color: "var(--danger)",
           }
       : null;
@@ -385,16 +392,34 @@ export default function QuizRunner({ lockedScope, onStageChange, mode = "word" }
 
           {q.format === "input" && (
             <>
-              <input
-                ref={inputRef}
-                value={typeInput}
-                onChange={(e) => setTypeInput(e.target.value)}
-                placeholder="Antwort"
-                disabled={checked}
-                autoCapitalize="none"
-                autoCorrect="off"
-                spellCheck={false}
-              />
+              {q.answer.trim().split(/\s+/).length >= 4 ? (
+                <textarea
+                  ref={(el) => {
+                    inputRef.current = el;
+                  }}
+                  rows={3}
+                  value={typeInput}
+                  onChange={(e) => setTypeInput(e.target.value)}
+                  placeholder="Antwort"
+                  disabled={checked}
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
+                />
+              ) : (
+                <input
+                  ref={(el) => {
+                    inputRef.current = el;
+                  }}
+                  value={typeInput}
+                  onChange={(e) => setTypeInput(e.target.value)}
+                  placeholder="Antwort"
+                  disabled={checked}
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
+                />
+              )}
               {!checked && q.umlaut && (
                 <div className="row" style={{ marginTop: 8, gap: 6 }}>
                   {UMLAUTS.map((ch) => (
@@ -453,6 +478,7 @@ export default function QuizRunner({ lockedScope, onStageChange, mode = "word" }
               {status.text}
             </p>
           )}
+          {showCompare && <AnswerCompare given={givenText} answer={q.answer} />}
           {checked && (
             <p className="muted" style={{ marginTop: 6, whiteSpace: "pre-line" }}>
               {q.reveal}

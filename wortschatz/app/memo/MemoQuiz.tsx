@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { useEnterAdvance } from "../useEnterAdvance";
+import AnswerCompare from "../AnswerCompare";
 import { shuffle } from "@/lib/quizGen";
 import {
   checkBlanks,
@@ -51,7 +52,6 @@ export default function MemoQuiz({ pool, ratio, scopeLabel }: Props) {
   const [ok, setOk] = useState(false);
   const [capsHint, setCapsHint] = useState(false); // 철자는 맞고 명사 대문자만 빠뜨려 틀림
   const [blankOk, setBlankOk] = useState<boolean[]>([]);
-  const [diff, setDiff] = useState<{ word: string; ok: boolean }[]>([]);
 
   const refs = useRef<Record<string, HTMLInputElement | HTMLTextAreaElement | null>>({});
   const focusKey = useRef<string | null>(null);
@@ -63,7 +63,6 @@ export default function MemoQuiz({ pool, ratio, scopeLabel }: Props) {
     setOk(false);
     setCapsHint(false);
     setBlankOk([]);
-    setDiff([]);
     focusKey.current = null;
   }
 
@@ -103,7 +102,6 @@ export default function MemoQuiz({ pool, ratio, scopeLabel }: Props) {
       setCapsHint(!res.every(Boolean) && checkBlanks(item.tokens, item.blanks, inputs, false).every(Boolean));
     } else {
       const cmp = compareSentences(item.s.sentence, text);
-      setDiff(cmp.words);
       setOk(cmp.ok);
       setCapsHint(!cmp.ok && compareSentences(item.s.sentence, text, false).ok);
     }
@@ -350,18 +348,12 @@ export default function MemoQuiz({ pool, ratio, scopeLabel }: Props) {
               명사는 첫 글자를 대문자로 써야 해요 Nomen großschreiben
             </p>
           )}
-          {item.stage === 2 && !ok && (
-            <p style={{ marginTop: 6 }}>
-              {diff.map((w, i) => (
-                <span
-                  key={i}
-                  style={w.ok ? undefined : { color: "var(--danger)", fontWeight: 700 }}
-                >
-                  {w.word}{" "}
-                </span>
-              ))}
-            </p>
-          )}
+          {item.stage === 2 && !ok && <AnswerCompare given={text} answer={item.s.sentence} />}
+          {item.stage === 1 &&
+            !ok &&
+            item.blanks.map((ti, k) =>
+              blankOk[k] ? null : <AnswerCompare key={k} given={inputs[k] ?? ""} answer={item.tokens[ti].core} />
+            )}
           {(item.stage === 1 || ok) && <p className="muted" style={{ marginTop: 6 }}>{item.s.sentence}</p>}
           {item.stage === 2 && item.s.translation && <p className="muted">{item.s.translation}</p>}
         </div>

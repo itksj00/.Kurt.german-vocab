@@ -123,3 +123,47 @@ export function compareSentences(
   const ok = a.length === b.length && hit.every(Boolean);
   return { ok, words };
 }
+
+// ── 정답 문장과 입력 문장을 나란히 비교 (화면 표시용) ──
+export type DiffWord = { word: string; ok: boolean };
+
+// 정답·입력 모두 단어 단위로 LCS 정렬해, 맞게 쓴 단어(ok)와 틀리거나 빠진/남은 단어를 표시한다.
+// … 같은 구두점만 있는 조각은 비교에서 빼고 ok로 둔다. 명사 대문자 규칙(enforceCaps)도 반영한다.
+export function diffSentences(
+  correct: string,
+  input: string,
+  enforceCaps = true
+): { answer: DiffWord[]; given: DiffWord[]; ok: boolean } {
+  const A = tokenize(correct);
+  const G = tokenize(input);
+  const ak = A.map((t) => normText(t.core));
+  const gk = G.map((t) => normText(t.core));
+  const ai = ak.map((k, i) => (k ? i : -1)).filter((i) => i >= 0);
+  const gi = gk.map((k, j) => (k ? j : -1)).filter((j) => j >= 0);
+
+  const dp: number[][] = Array.from({ length: ai.length + 1 }, () => new Array(gi.length + 1).fill(0));
+  for (let x = ai.length - 1; x >= 0; x--) {
+    for (let y = gi.length - 1; y >= 0; y--) {
+      dp[x][y] = ak[ai[x]] === gk[gi[y]] ? dp[x + 1][y + 1] + 1 : Math.max(dp[x + 1][y], dp[x][y + 1]);
+    }
+  }
+  const aOk = A.map((_, i) => !ak[i]); // 구두점뿐인 조각은 ok
+  const gOk = G.map((_, j) => !gk[j]);
+  let x = 0;
+  let y = 0;
+  while (x < ai.length && y < gi.length) {
+    const i = ai[x];
+    const j = gi[y];
+    if (ak[i] === gk[j]) {
+      const capsFine = !enforceCaps || isSentenceStart(A, i) || !startsUpper(A[i].core) || startsUpper(G[j].core);
+      aOk[i] = capsFine;
+      gOk[j] = capsFine;
+      x++;
+      y++;
+    } else if (dp[x + 1][y] >= dp[x][y + 1]) x++;
+    else y++;
+  }
+  const answer = A.map((t, i) => ({ word: `${t.lead}${t.core}${t.trail}`, ok: aOk[i] }));
+  const given = G.map((t, j) => ({ word: `${t.lead}${t.core}${t.trail}`, ok: gOk[j] }));
+  return { answer, given, ok: answer.every((w) => w.ok) && given.every((w) => w.ok) };
+}
