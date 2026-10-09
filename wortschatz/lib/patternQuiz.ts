@@ -17,6 +17,7 @@ import {
   caseLabel,
   connectiveParts,
   expressionWords,
+  isSentenceExpression,
   patternText,
 } from "./patterns";
 
@@ -71,13 +72,23 @@ const isExpr = (p: Pattern) => typeOf(p) === "expr" && has(p.expression);
 const isPrepLike = (p: Pattern) =>
   typeOf(p) !== "conj" && has(p.preposition) && !!p.pattern_case;
 
+// 고정 표현을 문장 통째로 적었으면(독독독 형식) 그 문장과 뜻을 예문으로 취급해
+// 빈칸 문제·문장 배열 문제가 별도 예문 없이도 만들어지게 한다.
+function withOwnSentence(p: Pattern, ex: ExampleMap): ExampleMap {
+  if (!isExpr(p) || !isSentenceExpression(p.expression!)) return ex;
+  const own = p.expression!.trim();
+  const list = ex[p.id] ?? [];
+  if (list.some((e) => norm(e.sentence) === norm(own))) return ex;
+  return { ...ex, [p.id]: [{ sentence: own, translation: p.meaning }, ...list] };
+}
+
 function validExamples(p: Pattern, ex: ExampleMap) {
   return (ex[p.id] ?? []).filter((e) => has(e.sentence));
 }
 
 // 풀이 후 보여줄 설명: 패턴, 뜻, 메모, 예문 한 줄(있을 때)
 function extraLines(p: Pattern, ex: ExampleMap, rng: Rng): string[] {
-  const v = validExamples(p, ex);
+  const v = validExamples(p, ex).filter((e) => !has(p.expression) || norm(e.sentence) !== norm(p.expression));
   const out: string[] = [];
   if (has(p.note)) out.push(p.note.trim());
   if (v.length) {
@@ -389,7 +400,7 @@ export function buildPatternQuestion(
   ex: ExampleMap,
   rng: Rng = Math.random
 ): Question {
-  const ctx: Ctx = { p, all, ex, rng };
+  const ctx: Ctx = { p, all, ex: withOwnSentence(p, ex), rng };
   const remaining = [...KINDS];
   while (remaining.length) {
     const total = remaining.reduce((s, k) => s + PATTERN_WEIGHTS[k], 0);
@@ -407,6 +418,6 @@ export function buildPatternQuestion(
 }
 
 export function eligiblePatternKinds(p: Pattern, all: Pattern[], ex: ExampleMap, rng: Rng = Math.random): PatternKind[] {
-  const ctx: Ctx = { p, all, ex, rng };
+  const ctx: Ctx = { p, all, ex: withOwnSentence(p, ex), rng };
   return KINDS.filter((k) => BUILDERS[k](ctx) !== null);
 }

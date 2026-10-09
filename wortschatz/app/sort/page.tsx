@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
+import { fetchAllRows } from "@/lib/supabaseFetch";
 import type { Pattern, Word } from "@/lib/types";
 import { posLabel, withArticle } from "@/lib/wordDisplay";
 import { PATTERN_SELECT, patternText } from "@/lib/patterns";
@@ -19,7 +20,7 @@ type Item = Word | Pattern;
 type Done = { word: Item; result: SortResult };
 
 const WORD_COLS: string =
-  "id, word, meaning, part_of_speech, pronunciation, difficulty, gender, plural, perfekt_aux, partizip2, wrong_count, review_stage, next_review_at, last_studied_at, created_at, sorted_at, sort_result";
+  "id, word, meaning, part_of_speech, pronunciation, difficulty, gender, plural, perfekt_aux, partizip2, wrong_count, review_stage, next_review_at, last_studied_at, created_at, sorted_at, sort_result, mnemonic";
 
 export default function SortPage() {
   // /sort#pattern 으로 들어오면 패턴 탭으로 시작한다. (로딩 화면에는 탭이 없어 서버 렌더와 어긋나지 않는다)
@@ -45,16 +46,18 @@ export default function SortPage() {
     async function load() {
       const otherTable = table === "words" ? "patterns" : "words";
       const [res, other] = await Promise.all([
-        supabase
-          .from(table)
-          .select(table === "words" ? WORD_COLS : PATTERN_SELECT)
-          .is("sorted_at", null)
-          .order("created_at", { ascending: true }),
+        fetchAllRows<Item>(table, table === "words" ? WORD_COLS : PATTERN_SELECT, {
+          sorted: "pending",
+          order: { column: "created_at" },
+        }).then(
+          (data) => ({ data, error: null as string | null }),
+          (e: unknown) => ({ data: [] as Item[], error: e instanceof Error ? e.message : String(e) })
+        ),
         supabase.from(otherTable).select("id", { count: "exact", head: true }).is("sorted_at", null),
       ]);
       if (!active) return;
-      if (res.error) setError(res.error.message);
-      else setQueue((res.data ?? []) as unknown as Item[]);
+      if (res.error) setError(res.error);
+      else setQueue(res.data);
       setOtherCount(other.error ? 0 : (other.count ?? 0));
       setLoading(false);
     }
@@ -247,7 +250,14 @@ export default function SortPage() {
                 {"verb" in w ? patternText(w) : withArticle(w)}
               </div>
               {flipped ? (
-                <div style={{ fontSize: "1.05rem" }}>{w.meaning}</div>
+                <div style={{ fontSize: "1.05rem" }}>
+                  {w.meaning}
+                  {!("verb" in w) && w.mnemonic && (
+                    <div className="muted" style={{ fontSize: "0.82rem", marginTop: 4 }}>
+                      💡 {w.mnemonic}
+                    </div>
+                  )}
+                </div>
               ) : (
                 <div className="muted" style={{ fontSize: "0.82rem" }}>
                   탭하면 뜻 보기 Tippen für Bedeutung

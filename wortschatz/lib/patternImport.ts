@@ -85,6 +85,8 @@ function firstOf(row: Record<string, unknown>, keys: string[]): string {
 }
 
 const HEAD_KEYS = ["앞말", "동사", "명사", "형용사", "핵심어"];
+// 고정 표현은 "표현" 또는 "문장" 한 칸(독독독처럼 문장 통째로)에 적는다.
+const EXPRESSION_KEYS = ["표현", "문장"];
 
 // 열로 나눠 적은 행 → 필드. 유형별 필수 칸이 비어 있으면 null.
 function fromColumns(type: PatternType, row: Record<string, unknown>): PatternFields | null {
@@ -116,7 +118,7 @@ export function parsePatternRow(row: Record<string, unknown>): ParsedPatternRow 
   const typeCol = str(row["유형"]);
   const declared = typeCol ? parseType(typeCol) : null;
   if (typeCol && !declared) return null;
-  const expressionCol = str(row["표현"]);
+  const expressionCol = firstOf(row, EXPRESSION_KEYS);
 
   let fields: PatternFields | null = null;
   let expression: string | null = null;
@@ -163,7 +165,7 @@ export function explainPatternRowFailure(row: Record<string, unknown>): string {
     return `알 수 없는 유형: "${typeCol}" (동사 / 명사 / 전치사 / 접속사 / 표현 중 하나)`;
   }
   const declared = typeCol ? parseType(typeCol) : null;
-  if (declared === "conj" || declared === "expr") return "표현 칸(또는 패턴 칸)이 비어 있음";
+  if (declared === "conj" || declared === "expr") return "표현(문장) 칸이 비어 있음";
   const text = str(row["패턴"]);
   if (text) return `패턴을 해석하지 못함: "${text}" (접속사·고정 표현은 유형 열에 접속사/표현으로 적거나 표현 칸을 쓰세요)`;
   if (declared === "prep") return "전치사/격 칸이 비어 있음";

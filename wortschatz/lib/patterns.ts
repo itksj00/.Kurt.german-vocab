@@ -54,6 +54,12 @@ export const COLLOCATION_NOUNS = [
   "Vorschlag", "Pause", "Abschied", "Rat", "Kritik", "Zeit", "Wahl", "Ziel", "Plan", "Recht",
 ];
 
+// 고정 표현을 독독독처럼 문장 통째로 적은 경우: 마침표·물음표·느낌표로 끝나거나 6단어 이상
+export function isSentenceExpression(expression: string): boolean {
+  const t = expression.trim();
+  return /[.!?]$/.test(t) || t.split(/\s+/).length >= 6;
+}
+
 // "eine wichtige Rolle spielen" → ["wichtige", "Rolle", "spielen"] (기능어/짧은 단어/구두점 제외)
 export function expressionWords(expression: string): string[] {
   return expression

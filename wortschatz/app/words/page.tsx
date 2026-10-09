@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { supabase } from "@/lib/supabaseClient";
+import { fetchAllRows } from "@/lib/supabaseFetch";
 import type { Word } from "@/lib/types";
 import { perfektText, posLabel, withArticle } from "@/lib/wordDisplay";
 
@@ -31,17 +31,17 @@ export default function WordsPage() {
     let active = true;
     async function load() {
       setLoading(true);
-      const { data, error } = await supabase
-        .from("words")
-        .select(
-          "id, word, meaning, part_of_speech, pronunciation, difficulty, gender, plural, perfekt_aux, partizip2, wrong_count, review_stage, next_review_at, last_studied_at, created_at, sorted_at, sort_result"
-        )
-        .order("word", { ascending: true });
-      if (!active) return;
-      if (error) {
-        setErrorMsg(error.message);
-      } else {
-        setWords(data ?? []);
+      try {
+        const data = await fetchAllRows<Word>(
+          "words",
+          "id, word, meaning, part_of_speech, pronunciation, difficulty, gender, plural, perfekt_aux, partizip2, wrong_count, review_stage, next_review_at, last_studied_at, created_at, sorted_at, sort_result, mnemonic",
+          { order: { column: "word" } }
+        );
+        if (!active) return;
+        setWords(data);
+      } catch (e) {
+        if (!active) return;
+        setErrorMsg(e instanceof Error ? e.message : String(e));
       }
       setLoading(false);
     }
@@ -76,7 +76,8 @@ export default function WordsPage() {
       list = list.filter(
         (w) =>
           w.word.toLowerCase().includes(q) ||
-          w.meaning.toLowerCase().includes(q)
+          w.meaning.toLowerCase().includes(q) ||
+          (w.mnemonic ?? "").toLowerCase().includes(q)
       );
     } else if (selectedLetter) {
       list = list.filter(
@@ -250,6 +251,11 @@ export default function WordsPage() {
                               ? ` · 틀림 ${w.wrong_count}회`
                               : ""}
                           </small>
+                          {w.mnemonic && (
+                            <small style={{ display: "block", marginTop: 2 }}>
+                              💡 {w.mnemonic}
+                            </small>
+                          )}
                         </div>
                       </div>
                       <span className="badge">

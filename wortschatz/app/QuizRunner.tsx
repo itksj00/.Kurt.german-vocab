@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
+import { fetchAllRows } from "@/lib/supabaseFetch";
 import type { Difficulty, Pattern, Word } from "@/lib/types";
 import { isDue, nextSchedule } from "@/lib/srs";
 import {
@@ -78,18 +79,23 @@ export default function QuizRunner({ lockedScope, onStageChange, mode = "word" }
     let active = true;
     async function load() {
       const fk = isPattern ? "pattern_id" : "word_id";
-      const { data, error } = await supabase
-        .from(table)
-        .select(isPattern ? PATTERN_SELECT : WORD_COLS)
-        .order("created_at", { ascending: false });
+      let data: Item[] | null = null;
+      let exData: Record<string, unknown>[] = [];
+      try {
+        data = await fetchAllRows<Item>(table, isPattern ? PATTERN_SELECT : WORD_COLS, {
+          order: { column: "created_at", ascending: false },
+        });
+        exData = await fetchAllRows<Record<string, unknown>>(
+          isPattern ? "pattern_examples" : "examples",
+          `${fk}, sentence, translation`
+        );
+      } catch {
+        // 불러오기에 실패하면 이전과 같이 목록을 비운 채로 둔다. (예문만 실패해도 문제 생성은 예문 없이 진행)
+      }
       if (!active) return;
-      const { data: exData } = await supabase
-        .from(isPattern ? "pattern_examples" : "examples")
-        .select(`${fk}, sentence, translation`);
-      if (!active) return;
-      if (!error) setAllWords((data ?? []) as unknown as Item[]);
+      if (data) setAllWords(data);
       const map: ExampleMap = {};
-      ((exData ?? []) as unknown as Record<string, unknown>[]).forEach((e) => {
+      exData.forEach((e) => {
         (map[e[fk] as number] ??= []).push({
           sentence: e.sentence as string,
           translation: (e.translation as string | null) ?? null,
