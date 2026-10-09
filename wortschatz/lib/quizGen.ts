@@ -1,4 +1,5 @@
 import type { Word } from "./types";
+import { capsOk } from "./caseRule";
 import { perfektText, withArticle } from "./wordDisplay";
 
 // ── 올인원 퀴즈 문제 생성 (순수 함수 · 렌더 경로 밖에서만 호출할 것) ──
@@ -428,10 +429,25 @@ export function hasExamples(w: { id: number }, ex: ExampleMap): boolean {
 
 // 정오답 판정. reorder/choice/input 모두 문자열 하나로 비교한다.
 // exprInput(표현 전체 입력), memoFull(문장 전체 입력)은 "…", "...", "~"와 구두점을 무시하고 비교한다.
-export function isCorrect(q: Question, input: string): boolean {
+// 명사는 첫 글자를 대문자로 써야 정답이다. (lib/caseRule.ts)
+function matches(q: Question, input: string, enforceCaps: boolean): boolean {
   const loose = q.kind === "exprInput" || q.kind === "memoFull";
   const clean = (v: string) => norm(loose ? v.replace(/…|\.{3}|~|[,;:.!?„“”"]/g, " ") : v);
   const given = clean(input);
   if (!given) return false;
-  return [q.answer, ...(q.accept ?? [])].some((a) => clean(a) === given);
+  // 문장·표현 전체 입력은 첫 단어를, 빈칸 문제는 빈칸이 문장 맨 앞일 때 그 단어를 명사 검사에서 뺀다.
+  const sentenceStart =
+    loose || /(?:^|[.!?:]\s*)[^\p{L}\p{N}_]*_____/u.test(q.prompt);
+  return [q.answer, ...(q.accept ?? [])].some(
+    (a) => clean(a) === given && (!enforceCaps || capsOk(a, input, { loose, sentenceStart }))
+  );
+}
+
+export function isCorrect(q: Question, input: string): boolean {
+  return matches(q, input, true);
+}
+
+// 철자는 맞는데 명사 대문자만 빠뜨려 틀린 경우 (안내 문구용)
+export function isCapsMistake(q: Question, input: string): boolean {
+  return !matches(q, input, true) && matches(q, input, false);
 }

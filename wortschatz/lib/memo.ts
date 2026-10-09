@@ -1,4 +1,5 @@
 // "독독독 오늘의 암기" 로직 — 순수 함수
+import { startsUpper } from "./caseRule";
 
 export type MemoSentence = {
   id: number;
@@ -72,19 +73,34 @@ export function pickBlanks(tokens: Token[], ratio: number, rng: Rng = Math.rando
   return pool.slice(0, count).sort((a, b) => a - b);
 }
 
-export function checkBlanks(tokens: Token[], blanks: number[], inputs: string[]): boolean[] {
+// 문장 첫 단어(처음이거나 앞 단어가 . ! ? 로 끝남)인지
+function isSentenceStart(tokens: Token[], i: number): boolean {
+  return i === 0 || /[.!?:]/.test(tokens[i - 1].trail) || /[„“"]/.test(tokens[i].lead);
+}
+
+// 명사(문장 첫 단어가 아닌 대문자 단어)는 입력도 첫 글자를 대문자로 써야 한다. enforceCaps=false면 대소문자를 모두 무시한다.
+export function checkBlanks(tokens: Token[], blanks: number[], inputs: string[], enforceCaps = true): boolean[] {
   return blanks.map((ti, k) => {
-    const given = normText(inputs[k] ?? "");
-    return given !== "" && given === normText(tokens[ti].core);
+    const raw = inputs[k] ?? "";
+    const given = normText(raw);
+    if (given === "" || given !== normText(tokens[ti].core)) return false;
+    if (!enforceCaps || isSentenceStart(tokens, ti)) return true;
+    return !startsUpper(tokens[ti].core) || startsUpper(raw);
   });
 }
 
 // ── 2단계: 전체 입력 ──
 // 정답 문장의 각 단어가 입력에서 (순서대로) 맞게 쓰였는지 LCS로 표시한다.
-export function compareSentences(correct: string, input: string): { ok: boolean; words: { word: string; ok: boolean }[] } {
+export function compareSentences(
+  correct: string,
+  input: string,
+  enforceCaps = true
+): { ok: boolean; words: { word: string; ok: boolean }[] } {
   const cw = tokenize(correct);
   const a = cw.map((t) => normText(t.core));
-  const b = normText(input).split(" ").filter(Boolean);
+  // 입력은 normText와 같은 기준(글자·숫자가 아닌 것은 구분자)으로 나눠 원래 대소문자를 함께 가진다.
+  const rawB = input.normalize("NFC").split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+  const b = rawB.map((w) => w.toLowerCase());
   const dp: number[][] = Array.from({ length: a.length + 1 }, () => new Array(b.length + 1).fill(0));
   for (let i = a.length - 1; i >= 0; i--) {
     for (let j = b.length - 1; j >= 0; j--) {
@@ -96,7 +112,8 @@ export function compareSentences(correct: string, input: string): { ok: boolean;
   let j = 0;
   while (i < a.length && j < b.length) {
     if (a[i] === b[j]) {
-      hit[i] = true;
+      // 명사(문장 첫 단어가 아닌 대문자 단어)의 첫 글자를 소문자로 쓰면 틀린 단어로 본다
+      hit[i] = !enforceCaps || isSentenceStart(cw, i) || !startsUpper(cw[i].core) || startsUpper(rawB[j]);
       i++;
       j++;
     } else if (dp[i + 1][j] >= dp[i][j + 1]) i++;

@@ -4,11 +4,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import { fetchAllRows } from "@/lib/supabaseFetch";
+import { useEnterAdvance } from "./useEnterAdvance";
 import type { Difficulty, Pattern, Word } from "@/lib/types";
 import { isDue, nextSchedule } from "@/lib/srs";
 import {
   buildQuestion,
   hasExamples,
+  isCapsMistake,
   isCorrect,
   shuffle,
   type ExampleMap,
@@ -71,6 +73,7 @@ export default function QuizRunner({ lockedScope, onStageChange, mode = "word" }
   const [placed, setPlaced] = useState<number[]>([]); // reorder: tokens 인덱스
   const [checked, setChecked] = useState(false);
   const [correct, setCorrect] = useState(false);
+  const [capsHint, setCapsHint] = useState(false); // 철자는 맞고 명사 대문자만 빠뜨려 틀림
   const inputRef = useRef<HTMLInputElement>(null);
 
   const finalizedRef = useRef(false);
@@ -143,6 +146,7 @@ export default function QuizRunner({ lockedScope, onStageChange, mode = "word" }
     setPlaced([]);
     setChecked(false);
     setCorrect(false);
+    setCapsHint(false);
   }
 
   function startQuiz() {
@@ -187,6 +191,7 @@ export default function QuizRunner({ lockedScope, onStageChange, mode = "word" }
     if (!question || checked) return;
     setChecked(true);
     setCorrect(isCorrect(question, given));
+    setCapsHint(isCapsMistake(question, given));
   }
 
   function handleChoice(opt: string) {
@@ -215,6 +220,14 @@ export default function QuizRunner({ lockedScope, onStageChange, mode = "word" }
       el?.setSelectionRange(start + 1, start + 1);
     });
   }
+
+  // Enter = 화면의 주 버튼: 확인 → 다음 (객관식은 보기를 누르면 바로 채점되므로 채점 후 Enter로 다음)
+  useEnterAdvance(stage === "playing" && !!question, () => {
+    if (!question) return;
+    if (checked) goNext();
+    else if (question.format === "input") check(typeInput);
+    else if (question.format === "reorder" && placed.length === question.tokens?.length) checkReorder();
+  });
 
   // 결과 화면 진입 시 wrong_count / last_studied_at / 복습 일정 반영 (1회만).
   useEffect(() => {
@@ -326,7 +339,10 @@ export default function QuizRunner({ lockedScope, onStageChange, mode = "word" }
     const status = checked
       ? correct
         ? { text: "정답! Richtig!", color: "var(--accent)" }
-        : { text: `오답 Falsch — 정답 Lösung: ${q.answer}`, color: "var(--danger)" }
+        : {
+            text: `오답 Falsch — 정답 Lösung: ${q.answer}${capsHint ? "\n명사는 첫 글자를 대문자로 써야 해요 Nomen großschreiben" : ""}`,
+            color: "var(--danger)",
+          }
       : null;
 
     return (
@@ -378,9 +394,6 @@ export default function QuizRunner({ lockedScope, onStageChange, mode = "word" }
                 autoCapitalize="none"
                 autoCorrect="off"
                 spellCheck={false}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !checked) check(typeInput);
-                }}
               />
               {!checked && q.umlaut && (
                 <div className="row" style={{ marginTop: 8, gap: 6 }}>
@@ -436,7 +449,7 @@ export default function QuizRunner({ lockedScope, onStageChange, mode = "word" }
           )}
 
           {status && (
-            <p className="muted" style={{ marginTop: 10, color: status.color }}>
+            <p className="muted" style={{ marginTop: 10, color: status.color, whiteSpace: "pre-line" }}>
               {status.text}
             </p>
           )}

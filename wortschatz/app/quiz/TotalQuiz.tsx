@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { fetchAllRows } from "@/lib/supabaseFetch";
-import { isCorrect, type ExampleMap } from "@/lib/quizGen";
+import { isCapsMistake, isCorrect, type ExampleMap } from "@/lib/quizGen";
+import { useEnterAdvance } from "../useEnterAdvance";
 import { buildTotalQuiz, SOURCE_LABEL, TOTAL_COUNT, type TotalInput, type TotalQuestion, type TotalSource } from "@/lib/totalQuiz";
 import type { MemoSentence } from "@/lib/memo";
 import type { Pattern, Word } from "@/lib/types";
@@ -44,6 +45,7 @@ export default function TotalQuiz({ onStageChange }: { onStageChange?: (s: Stage
   const [placed, setPlaced] = useState<number[]>([]);
   const [checked, setChecked] = useState(false);
   const [correct, setCorrect] = useState(false);
+  const [capsHint, setCapsHint] = useState(false); // 철자는 맞고 명사 대문자만 빠뜨려 틀림
   const [practice, setPractice] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -86,6 +88,7 @@ export default function TotalQuiz({ onStageChange }: { onStageChange?: (s: Stage
     setPlaced([]);
     setChecked(false);
     setCorrect(false);
+    setCapsHint(false);
   }
 
   function begin(list: TotalQuestion[], isPractice: boolean) {
@@ -113,6 +116,7 @@ export default function TotalQuiz({ onStageChange }: { onStageChange?: (s: Stage
     if (!q || checked) return;
     setChecked(true);
     setCorrect(isCorrect(q, given));
+    setCapsHint(isCapsMistake(q, given));
   }
 
   function goNext() {
@@ -135,6 +139,17 @@ export default function TotalQuiz({ onStageChange }: { onStageChange?: (s: Stage
       el?.setSelectionRange(start + 1, start + 1);
     });
   }
+
+  // Enter = 화면의 주 버튼: 확인 → 다음 (결과 보기)
+  useEnterAdvance(stage === "playing" && !!qs[idx], () => {
+    const cur = qs[idx];
+    if (!cur) return;
+    if (checked) goNext();
+    else if (cur.format === "input") check(typeInput);
+    else if (cur.format === "reorder" && cur.tokens && placed.length === cur.tokens.length) {
+      check(placed.map((i) => cur.tokens![i]).join(" "));
+    }
+  });
 
   if (!data) return <p className="muted">불러오는 중... Lädt...</p>;
 
@@ -229,7 +244,10 @@ export default function TotalQuiz({ onStageChange }: { onStageChange?: (s: Stage
   const status = checked
     ? correct
       ? { text: "정답! Richtig!", color: "var(--accent)" }
-      : { text: `오답 Falsch — 정답 Lösung: ${q.answer}`, color: "var(--danger)" }
+      : {
+          text: `오답 Falsch — 정답 Lösung: ${q.answer}${capsHint ? "\n명사는 첫 글자를 대문자로 써야 해요 Nomen großschreiben" : ""}`,
+          color: "var(--danger)",
+        }
     : null;
 
   return (
@@ -284,9 +302,6 @@ export default function TotalQuiz({ onStageChange }: { onStageChange?: (s: Stage
             autoCapitalize="none"
             autoCorrect="off"
             spellCheck={false}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !checked) check(typeInput);
-            }}
           />
           {!checked && q.umlaut && (
             <div className="row" style={{ marginTop: 8, gap: 6 }}>
@@ -340,7 +355,7 @@ export default function TotalQuiz({ onStageChange }: { onStageChange?: (s: Stage
       )}
 
       {status && (
-        <p className="muted" style={{ marginTop: 10, color: status.color }}>
+        <p className="muted" style={{ marginTop: 10, color: status.color, whiteSpace: "pre-line" }}>
           {status.text}
         </p>
       )}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { useEnterAdvance } from "../useEnterAdvance";
 import { shuffle } from "@/lib/quizGen";
 import {
   checkBlanks,
@@ -48,6 +49,7 @@ export default function MemoQuiz({ pool, ratio, scopeLabel }: Props) {
   const [text, setText] = useState("");
   const [checked, setChecked] = useState(false);
   const [ok, setOk] = useState(false);
+  const [capsHint, setCapsHint] = useState(false); // 철자는 맞고 명사 대문자만 빠뜨려 틀림
   const [blankOk, setBlankOk] = useState<boolean[]>([]);
   const [diff, setDiff] = useState<{ word: string; ok: boolean }[]>([]);
 
@@ -59,6 +61,7 @@ export default function MemoQuiz({ pool, ratio, scopeLabel }: Props) {
     setText("");
     setChecked(false);
     setOk(false);
+    setCapsHint(false);
     setBlankOk([]);
     setDiff([]);
     focusKey.current = null;
@@ -97,10 +100,12 @@ export default function MemoQuiz({ pool, ratio, scopeLabel }: Props) {
       const res = checkBlanks(item.tokens, item.blanks, inputs);
       setBlankOk(res);
       setOk(res.every(Boolean));
+      setCapsHint(!res.every(Boolean) && checkBlanks(item.tokens, item.blanks, inputs, false).every(Boolean));
     } else {
       const cmp = compareSentences(item.s.sentence, text);
       setDiff(cmp.words);
       setOk(cmp.ok);
+      setCapsHint(!cmp.ok && compareSentences(item.s.sentence, text, false).ok);
     }
     setChecked(true);
   }
@@ -116,6 +121,14 @@ export default function MemoQuiz({ pool, ratio, scopeLabel }: Props) {
       prepare(items[idx + 1]);
     }
   }
+
+  // Enter = 화면의 주 버튼: 확인 → 다음 (결과 보기). 입력이 비어 있으면 확인 버튼처럼 아무 일도 하지 않는다.
+  useEnterAdvance(phase === "playing" && !!items[idx], () => {
+    const cur = items[idx];
+    if (!cur) return;
+    if (checked) next();
+    else if (cur.stage === 1 ? inputs.some((v) => v.trim()) : text.trim().length > 0) check();
+  });
 
   function insertChar(ch: string) {
     const key = focusKey.current;
@@ -258,9 +271,6 @@ export default function MemoQuiz({ pool, ratio, scopeLabel }: Props) {
                     onFocus={() => {
                       focusKey.current = String(k);
                     }}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") (checked ? next : check)();
-                    }}
                     disabled={checked}
                     autoCapitalize="none"
                     autoCorrect="off"
@@ -335,6 +345,11 @@ export default function MemoQuiz({ pool, ratio, scopeLabel }: Props) {
           <p style={{ color: ok ? "var(--accent)" : "var(--danger)", fontWeight: 600 }}>
             {ok ? "정답! Richtig!" : "오답 Falsch"}
           </p>
+          {capsHint && (
+            <p className="muted" style={{ marginTop: 4, color: "var(--danger)" }}>
+              명사는 첫 글자를 대문자로 써야 해요 Nomen großschreiben
+            </p>
+          )}
           {item.stage === 2 && !ok && (
             <p style={{ marginTop: 6 }}>
               {diff.map((w, i) => (
