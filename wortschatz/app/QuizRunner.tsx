@@ -6,10 +6,13 @@ import { supabase } from "@/lib/supabaseClient";
 import { fetchAllRows } from "@/lib/supabaseFetch";
 import { useEnterAdvance } from "./useEnterAdvance";
 import AnswerCompare from "./AnswerCompare";
+import DateScopeSelect from "./DateScopeSelect";
+import { filterByDate, groupByDate } from "@/lib/dateScope";
 import type { Difficulty, Pattern, Word } from "@/lib/types";
 import { isDue, nextSchedule } from "@/lib/srs";
 import {
   buildQuestion,
+  buildReviewQuestion,
   hasExamples,
   isCapsMistake,
   isCorrect,
@@ -21,12 +24,11 @@ import { withArticle } from "@/lib/wordDisplay";
 import { buildPatternQuestion } from "@/lib/patternQuiz";
 import { PATTERN_SELECT, patternText } from "@/lib/patterns";
 
-type Scope = "due" | "all" | "recent" | "difficulty";
+type Scope = "due" | "all" | "date" | "difficulty";
 
 const UMLAUTS = ["ä", "ö", "ü", "ß"];
 
 const DIFFICULTIES: Difficulty[] = ["A1", "A2", "B1", "B2", "C1", "C2"];
-const RECENT_COUNT = 20;
 
 export type Stage = "setup" | "playing" | "result";
 
@@ -58,6 +60,7 @@ export default function QuizRunner({ lockedScope, onStageChange, mode = "word" }
 
   const [scope, setScope] = useState<Scope>(lockedScope ?? "due");
   const [difficulty, setDifficulty] = useState<Difficulty>("A1");
+  const [dateKey, setDateKey] = useState(""); // 날짜 선택 범위: 추가한 날짜 (YYYY-MM-DD, 현지 기준)
 
   const [stage, setStage] = useState<Stage>("setup");
   const [reloadKey, setReloadKey] = useState(0);
@@ -121,13 +124,16 @@ export default function QuizRunner({ lockedScope, onStageChange, mode = "word" }
     [allWords]
   );
 
+  const sortedPool = useMemo(() => allWords.filter((w) => w.sorted_at !== null), [allWords]);
+  // 날짜 드롭다운: 분류를 마친 항목이 있는 날짜와 개수 (최신순)
+  const dateOptions = useMemo(() => groupByDate(sortedPool), [sortedPool]);
+
   const scopedPool = useMemo(() => {
-    const sorted = allWords.filter((w) => w.sorted_at !== null);
-    if (scope === "due") return sorted.filter((w) => isDue(w.next_review_at));
-    if (scope === "all") return sorted;
-    if (scope === "recent") return sorted.slice(0, RECENT_COUNT);
-    return sorted.filter((w) => (w as Word).difficulty === difficulty);
-  }, [allWords, scope, difficulty]);
+    if (scope === "due") return sortedPool.filter((w) => isDue(w.next_review_at));
+    if (scope === "all") return sortedPool;
+    if (scope === "date") return filterByDate(sortedPool, dateKey);
+    return sortedPool.filter((w) => (w as Word).difficulty === difficulty);
+  }, [sortedPool, scope, difficulty, dateKey]);
 
   function changeStage(next: Stage) {
     setStage(next);
@@ -141,7 +147,12 @@ export default function QuizRunner({ lockedScope, onStageChange, mode = "word" }
     setQuestion(
       isPattern
         ? buildPatternQuestion(word as Pattern, allWords as Pattern[], examplesByWord)
-        : buildQuestion(word as Word, allWords as Word[], examplesByWord)
+        : // 복습 대상 범위는 입력 빈칸(예문에서 단어 입력) 50% / 객관식 빈칸 50%로 출제한다
+          (scope === "due" ? buildReviewQuestion : buildQuestion)(
+            word as Word,
+            allWords as Word[],
+            examplesByWord
+          )
     );
     setSelected(null);
     setTypeInput("");
@@ -152,9 +163,9 @@ export default function QuizRunner({ lockedScope, onStageChange, mode = "word" }
     setGivenText("");
   }
 
-  function startQuiz() {
-    if (scopedPool.length === 0 || pendingCount > 0) return;
-    const q = shuffle(scopedPool);
+  function startQuiz(pool: Item[] = scopedPool) {
+    if (pool.length === 0 || pendingCount > 0) return;
+    const q = shuffle(pool);
     setQueue(q);
     setQIndex(0);
     setAnswered([]);
@@ -274,7 +285,7 @@ export default function QuizRunner({ lockedScope, onStageChange, mode = "word" }
     const allScopes: { key: Scope; ko: string; de: string }[] = [
       { key: "due", ko: "복습 대상", de: "Heute fällig" },
       { key: "all", ko: `전체 ${noun}`, de: isPattern ? "Alle Muster" : "Alle Wörter" },
-      { key: "recent", ko: "최근 추가", de: "Zuletzt hinzugefügt" },
+      { key: "date", ko: "날짜 선택", de: "Nach Datum" },
       { key: "difficulty", ko: "난이도별", de: "Nach Niveau" },
     ];
     // 패턴에는 난이도가 없다.
@@ -297,6 +308,18 @@ export default function QuizRunner({ lockedScope, onStageChange, mode = "word" }
                   </div>
                 ))}
               </div>
+              {scope === "date" && (
+                <DateScopeSelect
+                  options={dateOptions}
+                  value={dateKey}
+                  noun={noun}
+                  onPick={(v) => {
+                    setDateKey(v);
+                    // 날짜(개수)를 고르면 그날 추가한 항목으로 바로 퀴즈를 시작한다
+                    if (v) startQuiz(filterByDate(sortedPool, v));
+                  }}
+                />
+              )}
               {scope === "difficulty" && (
                 <div className="field" style={{ marginBottom: 12 }}>
                   <label>난이도 Niveau</label>
@@ -328,7 +351,7 @@ export default function QuizRunner({ lockedScope, onStageChange, mode = "word" }
 
           <button
             className="btn"
-            onClick={startQuiz}
+            onClick={() => startQuiz()}
             disabled={scopedPool.length === 0 || pendingCount > 0}
           >
             퀴즈 시작 Quiz starten
