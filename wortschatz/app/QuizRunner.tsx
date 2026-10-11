@@ -7,12 +7,13 @@ import { fetchAllRows } from "@/lib/supabaseFetch";
 import { useEnterAdvance } from "./useEnterAdvance";
 import AnswerCompare from "./AnswerCompare";
 import DateScopeSelect from "./DateScopeSelect";
+import ReviewSwipe from "./ReviewSwipe";
+import { countDue, dueSummary } from "@/lib/reviewGate";
 import { filterByDate, groupByDate } from "@/lib/dateScope";
 import type { Difficulty, Pattern, Word } from "@/lib/types";
 import { isDue, nextSchedule } from "@/lib/srs";
 import {
   buildQuestion,
-  buildReviewQuestion,
   hasExamples,
   isCapsMistake,
   isCorrect,
@@ -61,6 +62,9 @@ export default function QuizRunner({ lockedScope, onStageChange, mode = "word" }
   const [scope, setScope] = useState<Scope>(lockedScope ?? "due");
   const [difficulty, setDifficulty] = useState<Difficulty>("A1");
   const [dateKey, setDateKey] = useState(""); // 날짜 선택 범위: 추가한 날짜 (YYYY-MM-DD, 현지 기준)
+  const [level, setLevel] = useState<1 | 2>(1); // 복습 대상 범위의 단계: 1 = 카드 스와이프, 2 = 여러 형식 문제
+  const [swipeMode, setSwipeMode] = useState(false); // 지금 진행 중인(또는 방금 끝난) 퀴즈가 1단계 카드 복습인지
+  const [otherDue, setOtherDue] = useState(0); // 다른 쪽(단어↔패턴)의 복습 대상 개수
 
   const [stage, setStage] = useState<Stage>("setup");
   const [reloadKey, setReloadKey] = useState(0);
@@ -100,7 +104,21 @@ export default function QuizRunner({ lockedScope, onStageChange, mode = "word" }
       } catch {
         // 불러오기에 실패하면 이전과 같이 목록을 비운 채로 둔다. (예문만 실패해도 문제 생성은 예문 없이 진행)
       }
+      // 다른 쪽(단어↔패턴)의 복습 대상 개수 — 복습이 남아 있으면 다른 퀴즈를 막기 위해 필요하다
+      let otherCount = 0;
+      try {
+        const nowIso = new Date().toISOString();
+        const res = await supabase
+          .from(isPattern ? "words" : "patterns")
+          .select("id", { count: "exact", head: true })
+          .not("sorted_at", "is", null)
+          .or(`next_review_at.is.null,next_review_at.lte.${nowIso}`);
+        otherCount = res.count ?? 0;
+      } catch {
+        // 개수를 못 가져오면 막지 않는다
+      }
       if (!active) return;
+      setOtherDue(otherCount);
       if (data) setAllWords(data);
       const map: ExampleMap = {};
       exData.forEach((e) => {
@@ -128,6 +146,10 @@ export default function QuizRunner({ lockedScope, onStageChange, mode = "word" }
   // 날짜 드롭다운: 분류를 마친 항목이 있는 날짜와 개수 (최신순)
   const dateOptions = useMemo(() => groupByDate(sortedPool), [sortedPool]);
 
+  // 복습 대상(단어+패턴)이 남아 있으면 복습 대상 범위 외의 퀴즈는 시작할 수 없다.
+  const ownDue = useMemo(() => countDue(sortedPool), [sortedPool]);
+  const blocked = scope !== "due" && ownDue + otherDue > 0;
+
   const scopedPool = useMemo(() => {
     if (scope === "due") return sortedPool.filter((w) => isDue(w.next_review_at));
     if (scope === "all") return sortedPool;
@@ -147,12 +169,7 @@ export default function QuizRunner({ lockedScope, onStageChange, mode = "word" }
     setQuestion(
       isPattern
         ? buildPatternQuestion(word as Pattern, allWords as Pattern[], examplesByWord)
-        : // 복습 대상 범위는 입력 빈칸(예문에서 단어 입력) 50% / 객관식 빈칸 50%로 출제한다
-          (scope === "due" ? buildReviewQuestion : buildQuestion)(
-            word as Word,
-            allWords as Word[],
-            examplesByWord
-          )
+        : buildQuestion(word as Word, allWords as Word[], examplesByWord)
     );
     setSelected(null);
     setTypeInput("");
@@ -164,15 +181,28 @@ export default function QuizRunner({ lockedScope, onStageChange, mode = "word" }
   }
 
   function startQuiz(pool: Item[] = scopedPool) {
-    if (pool.length === 0 || pendingCount > 0) return;
+    if (pool.length === 0 || pendingCount > 0 || blocked) return;
     const q = shuffle(pool);
     setQueue(q);
     setQIndex(0);
     setAnswered([]);
     setRetry(false);
     finalizedRef.current = false;
+    if (scope === "due" && level === 1) {
+      // 1단계: 문제를 만들지 않고 카드 스와이프로 진행한다 (끝나면 결과를 받아 복습 일정에 반영)
+      setSwipeMode(true);
+      changeStage("playing");
+      return;
+    }
+    setSwipeMode(false);
     setupQuestion(q[0]);
     changeStage("playing");
+  }
+
+  // 1단계 카드 복습이 끝났을 때: 첫 라운드 결과(몰라요 = 틀림)를 일정에 반영하고 결과 화면으로
+  function finishSwipe(results: { word: Item; wrong: boolean }[]) {
+    setAnswered(results);
+    changeStage("result");
   }
 
   // 방금 틀린 단어만 다시 출제한다. 첫 라운드에서 이미 일정이 반영됐으므로 DB에는 쓰지 않는다.
@@ -185,6 +215,7 @@ export default function QuizRunner({ lockedScope, onStageChange, mode = "word" }
     setAnswered([]);
     setRetry(true);
     finalizedRef.current = true;
+    setSwipeMode(false);
     setupQuestion(q[0]);
     changeStage("playing");
   }
@@ -237,7 +268,7 @@ export default function QuizRunner({ lockedScope, onStageChange, mode = "word" }
   }
 
   // Enter = 화면의 주 버튼: 확인 → 다음 (객관식은 보기를 누르면 바로 채점되므로 채점 후 Enter로 다음)
-  useEnterAdvance(stage === "playing" && !!question, () => {
+  useEnterAdvance(stage === "playing" && !swipeMode && !!question, () => {
     if (!question) return;
     if (checked) goNext();
     else if (question.format === "input") check(typeInput);
@@ -336,9 +367,40 @@ export default function QuizRunner({ lockedScope, onStageChange, mode = "word" }
             </>
           )}
 
+          {scope === "due" && (
+            <>
+              <div className="section-title">단계 Stufe</div>
+              <div className="stepper">
+                <div className={`step-opt ${level === 1 ? "sel" : ""}`} onClick={() => setLevel(1)}>
+                  1단계 아는지 확인
+                  <small>Wissen prüfen</small>
+                </div>
+                <div className={`step-opt ${level === 2 ? "sel" : ""}`} onClick={() => setLevel(2)}>
+                  2단계 문제 풀기
+                  <small>Quiz</small>
+                </div>
+              </div>
+              <p className="muted" style={{ marginBottom: 10 }}>
+                {level === 1
+                  ? `카드를 좌우로 넘겨 알아요/몰라요만 표시합니다. 몰라요로 넘긴 ${noun}은(는) 모두 알아요가 될 때까지 마지막에 다시 나옵니다.`
+                  : "문장 배열, 빈칸, 관사 등 여러 형식의 문제를 풉니다."}{" "}
+                1단계와 2단계 중 하나만 끝내도 복습을 마친 것으로 처리됩니다.
+              </p>
+            </>
+          )}
+
           <p className="muted" style={{ marginBottom: 10 }}>
             대상 {noun} {scopedPool.length}개 / 예문 있는 {noun} {withEx}개
           </p>
+
+          {blocked && (
+            <p style={{ marginBottom: 10, color: "var(--danger)" }}>
+              복습 대상({dueSummary(isPattern ? otherDue : ownDue, isPattern ? ownDue : otherDue)})이 남아 있습니다. 복습을 먼저 끝내야 다른 퀴즈를 할 수 있어요. Erst die fälligen Wiederholungen erledigen.{" "}
+              <Link href="/review" style={{ color: "var(--accent)" }}>
+                복습하러 가기 Zur Wiederholung
+              </Link>
+            </p>
+          )}
 
           {pendingCount > 0 && (
             <p style={{ marginBottom: 10, color: "var(--danger)" }}>
@@ -352,11 +414,19 @@ export default function QuizRunner({ lockedScope, onStageChange, mode = "word" }
           <button
             className="btn"
             onClick={() => startQuiz()}
-            disabled={scopedPool.length === 0 || pendingCount > 0}
+            disabled={scopedPool.length === 0 || pendingCount > 0 || blocked}
           >
-            퀴즈 시작 Quiz starten
+            {scope === "due" && level === 1 ? "복습 시작 Wiederholung starten" : "퀴즈 시작 Quiz starten"}
           </button>
         </div>
+      </div>
+    );
+  }
+
+  if (stage === "playing" && swipeMode) {
+    return (
+      <div>
+        <ReviewSwipe items={queue} onFinish={finishSwipe} />
       </div>
     );
   }
@@ -543,7 +613,9 @@ export default function QuizRunner({ lockedScope, onStageChange, mode = "word" }
       <div className="card">
         <div className="section-title">결과 Ergebnis</div>
         <p className="muted">
-          정답률 {rate}% ({total}문항 중 {correctCount}개 정답)
+          {swipeMode
+            ? `첫 확인에서 알아요 ${correctCount}개 · 몰라요 ${wrongCount}개 (총 ${total}개)`
+            : `정답률 ${rate}% (${total}문항 중 ${correctCount}개 정답)`}
         </p>
         <div className="result-bar">
           <div className="result-fill" style={{ width: `${rate}%` }} />
@@ -588,7 +660,7 @@ export default function QuizRunner({ lockedScope, onStageChange, mode = "word" }
         <div className="row" style={{ marginTop: 14 }}>
           {wrongCount > 0 && (
             <button className="btn" onClick={startRetry}>
-              틀린 {wrongCount}개 다시 풀기 Fehler wiederholen
+              {swipeMode ? `몰라요 ${wrongCount}개 문제로 연습 Üben` : `틀린 ${wrongCount}개 다시 풀기 Fehler wiederholen`}
             </button>
           )}
           <button

@@ -5,6 +5,8 @@ import { fetchAllRows } from "@/lib/supabaseFetch";
 import { isCapsMistake, isCorrect, type ExampleMap } from "@/lib/quizGen";
 import { useEnterAdvance } from "../useEnterAdvance";
 import AnswerCompare from "../AnswerCompare";
+import Link from "next/link";
+import { countDue, dueSummary } from "@/lib/reviewGate";
 import { buildTotalQuiz, SOURCE_LABEL, TOTAL_COUNT, type TotalInput, type TotalQuestion, type TotalSource } from "@/lib/totalQuiz";
 import type { MemoSentence } from "@/lib/memo";
 import type { Pattern, Word } from "@/lib/types";
@@ -105,7 +107,9 @@ export default function TotalQuiz({ onStageChange }: { onStageChange?: (s: Stage
   }
 
   function startNew() {
-    if (data) begin(buildTotalQuiz(data, TOTAL_COUNT), false);
+    if (!data) return;
+    if (countDue(data.words) + countDue(data.patterns) > 0) return; // 복습 대상이 남아 있으면 시작 불가
+    begin(buildTotalQuiz(data, TOTAL_COUNT), false);
   }
 
   function retryWrong() {
@@ -163,6 +167,10 @@ export default function TotalQuiz({ onStageChange }: { onStageChange?: (s: Stage
     memo: data.memos.length,
   };
   const available = counts.word + counts.pattern + counts.memo;
+  // 복습 대상(단어·패턴)이 남아 있으면 토탈 테스트도 시작할 수 없다.
+  const dueWords = countDue(data.words);
+  const duePatterns = countDue(data.patterns);
+  const blocked = dueWords + duePatterns > 0;
 
   if (stage === "setup") {
     return (
@@ -180,7 +188,15 @@ export default function TotalQuiz({ onStageChange }: { onStageChange?: (s: Stage
             불러오지 못해 제외한 항목: {failed.join(", ")}
           </p>
         )}
-        <button className="btn" onClick={startNew} disabled={available === 0}>
+        {blocked && (
+          <p style={{ marginBottom: 10, color: "var(--danger)" }}>
+            복습 대상({dueSummary(dueWords, duePatterns)})이 남아 있습니다. 복습을 먼저 끝내야 다른 퀴즈를 할 수 있어요. Erst die fälligen Wiederholungen erledigen.{" "}
+            <Link href="/review" style={{ color: "var(--accent)" }}>
+              복습하러 가기 Zur Wiederholung
+            </Link>
+          </p>
+        )}
+        <button className="btn" onClick={startNew} disabled={available === 0 || blocked}>
           {available === 0 ? "출제할 항목이 없습니다 Keine Einträge" : "토탈 테스트 시작 Gesamttest starten"}
         </button>
       </div>

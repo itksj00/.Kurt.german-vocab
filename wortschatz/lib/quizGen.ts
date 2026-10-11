@@ -412,26 +412,6 @@ export function buildQuestion(
   return buildDeInput(ctx)!;
 }
 
-// "복습 대상" 범위 전용 출제: 예문에서 해당 단어를 입력하는 문제(입력 빈칸)와 빈칸 고르기(객관식)를 반반 출제한다.
-// 한쪽을 만들 수 없으면 다른 빈칸 유형으로, 예문이 없는 단어는 같은 방식(입력/객관식)의 독일어 입력·뜻 고르기로 대체한다.
-export function buildReviewQuestion(
-  w: Word,
-  all: Word[],
-  ex: ExampleMap,
-  rng: Rng = Math.random
-): Question {
-  const ctx: Ctx = { w, all, ex, rng };
-  const order: QKind[] =
-    rng() < 0.5
-      ? ["inCloze", "mcCloze", "deInput", "mcMeaning"]
-      : ["mcCloze", "inCloze", "mcMeaning", "deInput"];
-  for (const k of order) {
-    const q = BUILDERS[k](ctx);
-    if (q) return q;
-  }
-  return buildQuestion(w, all, ex, rng);
-}
-
 // 이 단어에서 출제 가능한 유형 목록 (테스트/디버깅용)
 export function eligibleKinds(
   w: Word,
