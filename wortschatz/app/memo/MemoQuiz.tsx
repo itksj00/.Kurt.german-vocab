@@ -17,7 +17,8 @@ import {
 type Stage = 1 | 2;
 type StageChoice = "both" | "1" | "2";
 type Item = { s: MemoSentence; stage: Stage; tokens: Token[]; blanks: number[] };
-type Result = { item: Item; ok: boolean };
+// wrongBlanks: 1단계에서 틀린 빈칸의 토큰 번호 (다시 풀 때 이 빈칸만 비워 둔다)
+type Result = { item: Item; ok: boolean; wrongBlanks: number[] };
 type Phase = "setup" | "playing" | "result";
 
 const UMLAUTS = ["ä", "ö", "ü", "ß"];
@@ -80,15 +81,20 @@ export default function MemoQuiz({ pool, ratio, scopeLabel }: Props) {
     begin(makeItems(pool, stages, ratio));
   }
 
-  // 틀린 문장만 같은 단계로 다시 (빈칸 위치는 새로 뽑는다)
+  // 틀린 문장만 다시 푼다.
+  // 1단계는 틀렸던 빈칸만 다시 비우고, 맞힌 빈칸은 그대로 보여 준다. 2단계는 문장 전체를 다시 입력한다.
   function retryWrong() {
     const wrong = results.filter((r) => !r.ok);
     if (wrong.length === 0) return;
     const list: Item[] = [];
-    for (const stage of [1, 2] as Stage[]) {
-      const ss = wrong.filter((r) => r.item.stage === stage).map((r) => r.item.s);
-      list.push(...makeItems(ss, [stage], ratio));
+    for (const r of wrong) {
+      if (r.item.stage === 1 && r.wrongBlanks.length > 0) {
+        list.push({ ...r.item, blanks: r.wrongBlanks });
+      }
     }
+    const ss = wrong.filter((r) => r.item.stage === 2).map((r) => r.item.s);
+    list.push(...makeItems(ss, [2], ratio));
+    if (list.length === 0) return;
     begin(list);
   }
 
@@ -110,7 +116,8 @@ export default function MemoQuiz({ pool, ratio, scopeLabel }: Props) {
 
   function next() {
     const item = items[idx];
-    const nextResults = [...results, { item, ok }];
+    const wrongBlanks = item.stage === 1 ? item.blanks.filter((_, k) => !blankOk[k]) : [];
+    const nextResults = [...results, { item, ok, wrongBlanks }];
     setResults(nextResults);
     if (idx + 1 >= items.length) {
       setPhase("result");
@@ -216,6 +223,11 @@ export default function MemoQuiz({ pool, ratio, scopeLabel }: Props) {
               ))}
             </ul>
           </>
+        )}
+        {wrong.some((r) => r.item.stage === 1) && (
+          <p className="muted" style={{ marginTop: 10 }}>
+            다시 풀 때 1단계는 틀렸던 빈칸만 비워 두고, 맞힌 빈칸은 그대로 보여 줍니다.
+          </p>
         )}
         <div className="row" style={{ marginTop: 14 }}>
           {wrong.length > 0 && (
