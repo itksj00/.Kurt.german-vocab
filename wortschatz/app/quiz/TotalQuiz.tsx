@@ -7,6 +7,7 @@ import { useEnterAdvance } from "../useEnterAdvance";
 import AnswerCompare from "../AnswerCompare";
 import Link from "next/link";
 import { countDue, dueSummary } from "@/lib/reviewGate";
+import { useReviewDone } from "../useReviewDone";
 import { buildTotalQuiz, SOURCE_LABEL, TOTAL_COUNT, type TotalInput, type TotalQuestion, type TotalSource } from "@/lib/totalQuiz";
 import type { MemoSentence } from "@/lib/memo";
 import type { Pattern, Word } from "@/lib/types";
@@ -108,7 +109,7 @@ export default function TotalQuiz({ onStageChange }: { onStageChange?: (s: Stage
 
   function startNew() {
     if (!data) return;
-    if (countDue(data.words) + countDue(data.patterns) > 0) return; // 복습 대상이 남아 있으면 시작 불가
+    if ((wordsDone ? 0 : countDue(data.words)) + (patternsDone ? 0 : countDue(data.patterns)) > 0) return; // 복습 대상이 남아 있으면 시작 불가
     begin(buildTotalQuiz(data, TOTAL_COUNT), false);
   }
 
@@ -149,6 +150,9 @@ export default function TotalQuiz({ onStageChange }: { onStageChange?: (s: Stage
   }
 
   // Enter = 화면의 주 버튼: 확인 → 다음 (결과 보기)
+  const wordsDone = useReviewDone("words"); // 오늘 단어 복습 회차를 마쳤는지
+  const patternsDone = useReviewDone("patterns");
+
   useEnterAdvance(stage === "playing" && !!qs[idx], () => {
     const cur = qs[idx];
     if (!cur) return;
@@ -168,8 +172,9 @@ export default function TotalQuiz({ onStageChange }: { onStageChange?: (s: Stage
   };
   const available = counts.word + counts.pattern + counts.memo;
   // 복습 대상(단어·패턴)이 남아 있으면 토탈 테스트도 시작할 수 없다.
-  const dueWords = countDue(data.words);
-  const duePatterns = countDue(data.patterns);
+  // 오늘 복습 회차를 마친 쪽(단어/패턴)은 남은 복습이 있어도 막지 않는다.
+  const dueWords = wordsDone ? 0 : countDue(data.words);
+  const duePatterns = patternsDone ? 0 : countDue(data.patterns);
   const blocked = dueWords + duePatterns > 0;
 
   if (stage === "setup") {

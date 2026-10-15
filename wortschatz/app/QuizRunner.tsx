@@ -10,7 +10,8 @@ import DateScopeSelect from "./DateScopeSelect";
 import ReviewSwipe from "./ReviewSwipe";
 import SentenceMaker from "./SentenceMaker";
 import { setSentenceGate, useSentenceGate } from "./useSentenceGate";
-import { countDue, dueSummary } from "@/lib/reviewGate";
+import { markReviewDone, useReviewDone } from "./useReviewDone";
+import { countDue, dueSummary, pickReviewBatch } from "@/lib/reviewGate";
 import { filterByDate, groupByDate } from "@/lib/dateScope";
 import type { Difficulty, Pattern, Word } from "@/lib/types";
 import { isDue, nextSchedule } from "@/lib/srs";
@@ -153,13 +154,19 @@ export default function QuizRunner({ lockedScope, onStageChange, mode = "word" }
 
   // 복습 대상(단어+패턴)이 남아 있으면 복습 대상 범위 외의 퀴즈는 시작할 수 없다.
   const ownDue = useMemo(() => countDue(sortedPool), [sortedPool]);
-  const blocked = scope !== "due" && ownDue + otherDue > 0;
+  // 오늘 복습 회차를 마친 쪽(단어/패턴)은 남은 복습이 있어도 다른 퀴즈를 막지 않는다.
+  const ownDone = useReviewDone(isPattern ? "patterns" : "words");
+  const otherDone = useReviewDone(isPattern ? "words" : "patterns");
+  const pendOwn = ownDone ? 0 : ownDue;
+  const pendOther = otherDone ? 0 : otherDue;
+  const blocked = scope !== "due" && pendOwn + pendOther > 0;
   // 복습 단어 퀴즈는 3단계(내 문장 만들기)를 먼저 해야 1·2단계를 시작할 수 있다. (복습할 단어가 없으면 해당 없음)
   const needsSentences = !isPattern && scope === "due" && ownDue > 0 && !sentenceOpen;
   const lv = needsSentences ? 3 : level; // 실제로 적용되는 단계
 
   const scopedPool = useMemo(() => {
-    if (scope === "due") return sortedPool.filter((w) => isDue(w.next_review_at));
+    // 복습 대상은 가장 오래 밀린 것부터 한 회차 분량(30개)만
+    if (scope === "due") return pickReviewBatch(sortedPool);
     if (scope === "all") return sortedPool;
     if (scope === "date") return filterByDate(sortedPool, dateKey);
     return sortedPool.filter((w) => (w as Word).difficulty === difficulty);
@@ -305,6 +312,7 @@ export default function QuizRunner({ lockedScope, onStageChange, mode = "word" }
     finalizedRef.current = true;
     // 복습 단어 퀴즈(1·2단계)를 마쳤으니, 다음 복습은 다시 3단계부터
     if (scope === "due" && !isPattern) setSentenceGate(false);
+    if (scope === "due") markReviewDone(isPattern ? "patterns" : "words");
 
     async function finalize() {
       const nowMs = Date.now();
@@ -320,7 +328,7 @@ export default function QuizRunner({ lockedScope, onStageChange, mode = "word" }
             Object.assign(update, nextSchedule(a.word.review_stage, false, nowMs));
           } else if (isDue(a.word.next_review_at, nowMs)) {
             // 복습 시점에 맞힘 → 한 단계 상승 (연습으로 미리 푼 경우는 일정 유지)
-            Object.assign(update, nextSchedule(a.word.review_stage, true, nowMs));
+            Object.assign(update, nextSchedule(a.word.review_stage, true, nowMs, a.word.next_review_at));
           }
           return supabase.from(table).update(update).eq("id", a.word.id);
         })
@@ -434,13 +442,18 @@ export default function QuizRunner({ lockedScope, onStageChange, mode = "word" }
             </>
           )}
 
+          {scope === "due" && ownDue > scopedPool.length && (
+            <p className="muted" style={{ marginBottom: 6 }}>
+              복습 대상 {ownDue}개 중 가장 오래 밀린 {scopedPool.length}개를 먼저 합니다. 끝나면 이어서 다음 회차를 할 수 있어요.
+            </p>
+          )}
           <p className="muted" style={{ marginBottom: 10 }}>
             대상 {noun} {scopedPool.length}개 / 예문 있는 {noun} {withEx}개
           </p>
 
           {blocked && (
             <p style={{ marginBottom: 10, color: "var(--danger)" }}>
-              복습 대상({dueSummary(isPattern ? otherDue : ownDue, isPattern ? ownDue : otherDue)})이 남아 있습니다. 복습을 먼저 끝내야 다른 퀴즈를 할 수 있어요. Erst die fälligen Wiederholungen erledigen.{" "}
+              복습 대상({dueSummary(isPattern ? pendOther : pendOwn, isPattern ? pendOwn : pendOther)})이 남아 있습니다. 복습을 먼저 끝내야 다른 퀴즈를 할 수 있어요. Erst die fälligen Wiederholungen erledigen.{" "}
               <Link href="/review" style={{ color: "var(--accent)" }}>
                 복습하러 가기 Zur Wiederholung
               </Link>
