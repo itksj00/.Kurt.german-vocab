@@ -165,7 +165,7 @@ export default function QuizRunner({ lockedScope, onStageChange, mode = "word" }
   const lv = needsSentences ? 3 : level; // 실제로 적용되는 단계
 
   const scopedPool = useMemo(() => {
-    // 복습 대상은 가장 오래 밀린 것부터 한 회차 분량(30개)만
+    // 복습 대상은 가장 오래 밀린 것부터 한 회차 분량(50개)만
     if (scope === "due") return pickReviewBatch(sortedPool);
     if (scope === "all") return sortedPool;
     if (scope === "date") return filterByDate(sortedPool, dateKey);

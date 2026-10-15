@@ -3,8 +3,8 @@
 import { isDue } from "./srs";
 import type { StorageLike } from "./sentenceGate";
 
-// 한 회차에 복습하는 최대 개수. 가장 오래 밀린 것부터 이 개수만큼 먼저 한다.
-export const REVIEW_BATCH_SIZE = 30;
+// 한 회차에 복습하는 최대 개수(50). 가장 오래 밀린 것부터 이 개수만큼 먼저 한다.
+export const REVIEW_BATCH_SIZE = 50;
 
 export function countDue<T extends { sorted_at: string | null; next_review_at: string | null }>(
   items: T[],
