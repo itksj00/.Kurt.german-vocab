@@ -22,7 +22,6 @@ export default function PatternForm({ patternId }: { patternId?: number }) {
     { sentence: "", translation: "" },
   ]);
 
-  const [legacyExtras, setLegacyExtras] = useState(false); // 메모가 이미 있는 고정 표현
   const [loading, setLoading] = useState(isEdit);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -60,7 +59,6 @@ export default function PatternForm({ patternId }: { patternId?: number }) {
         translation: (r.translation as string | null) ?? "",
       }));
       setExamples(loaded.length > 0 ? loaded : [{ sentence: "", translation: "" }]);
-      setLegacyExtras(!!(row.note ?? "").trim());
       setLoading(false);
     }
     load();
@@ -74,8 +72,8 @@ export default function PatternForm({ patternId }: { patternId?: number }) {
   }
 
   const textType = type === "conj" || type === "expr"; // 표현 문자열 하나만 쓰는 유형
-  // 고정 표현은 독독독처럼 문장 + 뜻만 입력하고 예문은 선택 입력이다. 메모 칸은 숨긴다. (이미 메모가 있는 항목은 그대로 보여 준다)
-  const simpleExpr = type === "expr" && !legacyExtras;
+  // 고정 표현은 독독독처럼 문장 + 뜻을 입력하고, 예문과 메모는 선택 입력이다.
+  const isExpr = type === "expr";
 
   // 유형에 맞게 정리한 저장값. 쓰지 않는 칸은 null.
   function buildPayload() {
@@ -93,7 +91,7 @@ export default function PatternForm({ patternId }: { patternId?: number }) {
       preposition: usesPrep ? preposition.trim() : null,
       pattern_case: usesPrep ? patternCase : null,
       expression: textType ? expression.trim() : null,
-      note: simpleExpr ? null : note.trim() || null,
+      note: note.trim() || null,
       meaning: meaning.trim(),
     };
   }
@@ -276,20 +274,18 @@ export default function PatternForm({ patternId }: { patternId?: number }) {
         <input
           value={meaning}
           onChange={(e) => setMeaning(e.target.value)}
-          placeholder={simpleExpr ? "예: 디지털화는 일상에서 중요한 역할을 한다." : "예: ~을 기대하다"}
+          placeholder={isExpr ? "예: 디지털화는 일상에서 중요한 역할을 한다." : "예: ~을 기대하다"}
         />
       </div>
 
-      {!simpleExpr && (
-        <div className="field" style={{ marginTop: 8 }}>
-          <label>메모 (선택) Notiz</label>
-          <input
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            placeholder="예: 부문장, 동사는 문장 끝 / 분리동사"
-          />
-        </div>
-      )}
+      <div className="field" style={{ marginTop: 8 }}>
+        <label>메모 (선택) Notiz</label>
+        <input
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          placeholder={isExpr ? "예: 격식체, 구어에서 자주 씀 / 비슷한 표현" : "예: 부문장, 동사는 문장 끝 / 분리동사"}
+        />
+      </div>
 
       {preview && (
         <p className="muted" style={{ marginTop: 10 }}>

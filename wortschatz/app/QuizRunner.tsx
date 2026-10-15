@@ -8,6 +8,8 @@ import { useEnterAdvance } from "./useEnterAdvance";
 import AnswerCompare from "./AnswerCompare";
 import DateScopeSelect from "./DateScopeSelect";
 import ReviewSwipe from "./ReviewSwipe";
+import SentenceMaker from "./SentenceMaker";
+import { setSentenceGate, useSentenceGate } from "./useSentenceGate";
 import { countDue, dueSummary } from "@/lib/reviewGate";
 import { filterByDate, groupByDate } from "@/lib/dateScope";
 import type { Difficulty, Pattern, Word } from "@/lib/types";
@@ -62,7 +64,10 @@ export default function QuizRunner({ lockedScope, onStageChange, mode = "word" }
   const [scope, setScope] = useState<Scope>(lockedScope ?? "due");
   const [difficulty, setDifficulty] = useState<Difficulty>("A1");
   const [dateKey, setDateKey] = useState(""); // 날짜 선택 범위: 추가한 날짜 (YYYY-MM-DD, 현지 기준)
-  const [level, setLevel] = useState<1 | 2>(1); // 복습 대상 범위의 단계: 1 = 카드 스와이프, 2 = 여러 형식 문제
+  const [level, setLevel] = useState<1 | 2 | 3>(1); // 복습 대상 범위의 단계: 1 = 카드 스와이프, 2 = 여러 형식 문제, 3 = 내 문장 만들기
+  const [makeMode, setMakeMode] = useState(false); // 지금 3단계(내 문장 만들기) 진행 중인지
+  const [makeWords, setMakeWords] = useState<Word[]>([]); // 3단계에서 문장을 만들 무작위 단어 5개
+  const sentenceOpen = useSentenceGate(); // 3단계를 마쳐서 1·2단계 복습이 열려 있는지
   const [swipeMode, setSwipeMode] = useState(false); // 지금 진행 중인(또는 방금 끝난) 퀴즈가 1단계 카드 복습인지
   const [otherDue, setOtherDue] = useState(0); // 다른 쪽(단어↔패턴)의 복습 대상 개수
 
@@ -149,6 +154,9 @@ export default function QuizRunner({ lockedScope, onStageChange, mode = "word" }
   // 복습 대상(단어+패턴)이 남아 있으면 복습 대상 범위 외의 퀴즈는 시작할 수 없다.
   const ownDue = useMemo(() => countDue(sortedPool), [sortedPool]);
   const blocked = scope !== "due" && ownDue + otherDue > 0;
+  // 복습 단어 퀴즈는 3단계(내 문장 만들기)를 먼저 해야 1·2단계를 시작할 수 있다. (복습할 단어가 없으면 해당 없음)
+  const needsSentences = !isPattern && scope === "due" && ownDue > 0 && !sentenceOpen;
+  const lv = needsSentences ? 3 : level; // 실제로 적용되는 단계
 
   const scopedPool = useMemo(() => {
     if (scope === "due") return sortedPool.filter((w) => isDue(w.next_review_at));
@@ -182,13 +190,22 @@ export default function QuizRunner({ lockedScope, onStageChange, mode = "word" }
 
   function startQuiz(pool: Item[] = scopedPool) {
     if (pool.length === 0 || pendingCount > 0 || blocked) return;
+    if (scope === "due" && !isPattern && lv === 3) {
+      // 3단계: 복습 대상 단어 중 무작위 5개로 내 문장 만들기 (저장하지 않음)
+      setMakeWords(shuffle(pool).slice(0, 5) as Word[]);
+      setMakeMode(true);
+      setSwipeMode(false);
+      changeStage("playing");
+      return;
+    }
+    if (needsSentences) return; // 3단계를 먼저 해야 한다
     const q = shuffle(pool);
     setQueue(q);
     setQIndex(0);
     setAnswered([]);
     setRetry(false);
     finalizedRef.current = false;
-    if (scope === "due" && level === 1) {
+    if (scope === "due" && lv === 1) {
       // 1단계: 문제를 만들지 않고 카드 스와이프로 진행한다 (끝나면 결과를 받아 복습 일정에 반영)
       setSwipeMode(true);
       changeStage("playing");
@@ -197,6 +214,13 @@ export default function QuizRunner({ lockedScope, onStageChange, mode = "word" }
     setSwipeMode(false);
     setupQuestion(q[0]);
     changeStage("playing");
+  }
+
+  // 3단계 요약 화면에서 돌아오기 (3단계를 마친 시점에 이미 1·2단계가 열려 있다)
+  function finishMaking() {
+    setMakeMode(false);
+    setLevel(1);
+    changeStage("setup");
   }
 
   // 1단계 카드 복습이 끝났을 때: 첫 라운드 결과(몰라요 = 틀림)를 일정에 반영하고 결과 화면으로
@@ -268,7 +292,7 @@ export default function QuizRunner({ lockedScope, onStageChange, mode = "word" }
   }
 
   // Enter = 화면의 주 버튼: 확인 → 다음 (객관식은 보기를 누르면 바로 채점되므로 채점 후 Enter로 다음)
-  useEnterAdvance(stage === "playing" && !swipeMode && !!question, () => {
+  useEnterAdvance(stage === "playing" && !swipeMode && !makeMode && !!question, () => {
     if (!question) return;
     if (checked) goNext();
     else if (question.format === "input") check(typeInput);
@@ -279,6 +303,8 @@ export default function QuizRunner({ lockedScope, onStageChange, mode = "word" }
   useEffect(() => {
     if (stage !== "result" || finalizedRef.current) return;
     finalizedRef.current = true;
+    // 복습 단어 퀴즈(1·2단계)를 마쳤으니, 다음 복습은 다시 3단계부터
+    if (scope === "due" && !isPattern) setSentenceGate(false);
 
     async function finalize() {
       const nowMs = Date.now();
@@ -301,7 +327,7 @@ export default function QuizRunner({ lockedScope, onStageChange, mode = "word" }
       );
     }
     finalize();
-  }, [stage, answered, table]);
+  }, [stage, answered, table, scope, isPattern]);
 
   if (loading) {
     return (
@@ -371,20 +397,39 @@ export default function QuizRunner({ lockedScope, onStageChange, mode = "word" }
             <>
               <div className="section-title">단계 Stufe</div>
               <div className="stepper">
-                <div className={`step-opt ${level === 1 ? "sel" : ""}`} onClick={() => setLevel(1)}>
+                <div
+                  className={`step-opt ${lv === 1 ? "sel" : ""}`}
+                  style={needsSentences ? { opacity: 0.45, cursor: "not-allowed" } : undefined}
+                  onClick={() => !needsSentences && setLevel(1)}
+                >
                   1단계 아는지 확인
                   <small>Wissen prüfen</small>
                 </div>
-                <div className={`step-opt ${level === 2 ? "sel" : ""}`} onClick={() => setLevel(2)}>
+                <div
+                  className={`step-opt ${lv === 2 ? "sel" : ""}`}
+                  style={needsSentences ? { opacity: 0.45, cursor: "not-allowed" } : undefined}
+                  onClick={() => !needsSentences && setLevel(2)}
+                >
                   2단계 문제 풀기
                   <small>Quiz</small>
                 </div>
+                {!isPattern && (
+                  <div className={`step-opt ${lv === 3 ? "sel" : ""}`} onClick={() => setLevel(3)}>
+                    3단계 문장 만들기
+                    <small>Eigene Sätze</small>
+                  </div>
+                )}
               </div>
               <p className="muted" style={{ marginBottom: 10 }}>
-                {level === 1
-                  ? `카드를 좌우로 넘겨 알아요/몰라요만 표시합니다. 몰라요로 넘긴 ${noun}은(는) 모두 알아요가 될 때까지 마지막에 다시 나옵니다.`
-                  : "문장 배열, 빈칸, 관사 등 여러 형식의 문제를 풉니다."}{" "}
-                1단계와 2단계 중 하나만 끝내도 복습을 마친 것으로 처리됩니다.
+                {lv === 1 &&
+                  `카드를 좌우로 넘겨 알아요/몰라요만 표시합니다. 몰라요로 넘긴 ${noun}은(는) 모두 알아요가 될 때까지 마지막에 다시 나옵니다.`}
+                {lv === 2 && "문장 배열, 빈칸, 관사 등 여러 형식의 문제를 풉니다."}
+                {lv === 3 && "복습 대상 단어 중 무작위 5개로 나만의 문장을 만듭니다. 예문을 참고할 수 있고 저장되지는 않습니다."}{" "}
+                {needsSentences
+                  ? "복습(1·2단계)을 하려면 먼저 3단계를 마쳐야 합니다. Erst eigene Sätze bilden."
+                  : !isPattern
+                    ? "3단계를 마쳤어요. 1단계와 2단계 중 하나를 끝내면 복습이 끝나고, 다음 복습은 다시 3단계부터 시작합니다."
+                    : "1단계와 2단계 중 하나만 끝내도 복습을 마친 것으로 처리됩니다."}
               </p>
             </>
           )}
@@ -416,9 +461,26 @@ export default function QuizRunner({ lockedScope, onStageChange, mode = "word" }
             onClick={() => startQuiz()}
             disabled={scopedPool.length === 0 || pendingCount > 0 || blocked}
           >
-            {scope === "due" && level === 1 ? "복습 시작 Wiederholung starten" : "퀴즈 시작 Quiz starten"}
+            {scope === "due" && lv === 3 && !isPattern
+              ? "문장 만들기 시작 Sätze bilden"
+              : scope === "due" && lv === 1
+                ? "복습 시작 Wiederholung starten"
+                : "퀴즈 시작 Quiz starten"}
           </button>
         </div>
+      </div>
+    );
+  }
+
+  if (stage === "playing" && makeMode) {
+    return (
+      <div>
+        <SentenceMaker
+          words={makeWords}
+          examples={examplesByWord}
+          onComplete={() => setSentenceGate(true)}
+          onDone={finishMaking}
+        />
       </div>
     );
   }
