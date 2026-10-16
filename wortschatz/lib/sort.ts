@@ -12,10 +12,21 @@ export function swipeDecision(dx: number, threshold = SWIPE_THRESHOLD): SortResu
   return null;
 }
 
-// 알아요/몰라요 모두 오늘부터 퀴즈·복습 대상(1단계)으로 시작한다.
+// 현지 시간 기준 내일 0시
+export function startOfTomorrow(now = Date.now()): string {
+  const d = new Date(now);
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1).toISOString();
+}
+
+// 알아요/몰라요 모두 1일 단계로 시작하되, 오늘 추가한 단어의 첫 복습은 내일부터다.
+// (날짜 선택·전체 범위 퀴즈로는 분류 직후부터 풀 수 있다)
 export function sortPatch(result: SortResult, now = Date.now()) {
-  const iso = new Date(now).toISOString();
-  return { sorted_at: iso, sort_result: result, review_stage: 0, next_review_at: iso };
+  return {
+    sorted_at: new Date(now).toISOString(),
+    sort_result: result,
+    review_stage: 0,
+    next_review_at: startOfTomorrow(now),
+  };
 }
 
 // 되돌리기: 다시 분류 대기 상태로

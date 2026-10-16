@@ -6,7 +6,7 @@ import { posLabel, withArticle } from "@/lib/wordDisplay";
 import { patternText } from "@/lib/patterns";
 import { SWIPE_THRESHOLD, swipeDecision, type SortResult } from "@/lib/sort";
 import { currentId, initSwipe, isFinished, swipeCard, type SwipeState } from "@/lib/reviewSwipe";
-import { shuffle } from "@/lib/quizGen";
+import { shuffle, type ExampleMap } from "@/lib/quizGen";
 
 type Item = Word | Pattern;
 
@@ -14,9 +14,11 @@ type Item = Word | Pattern;
 // 모두 끝나면 onFinish에 카드별 결과(첫 라운드에서 몰라요였으면 wrong=true)를 넘긴다.
 export default function ReviewSwipe({
   items,
+  examples,
   onFinish,
 }: {
   items: Item[];
+  examples: ExampleMap;
   onFinish: (results: { word: Item; wrong: boolean }[]) => void;
 }) {
   const [state, setState] = useState<SwipeState>(() => initSwipe(items.map((x) => x.id)));
@@ -152,6 +154,16 @@ export default function ReviewSwipe({
           {flipped ? (
             <div style={{ fontSize: "1.05rem" }}>
               {w.meaning}
+              {(examples[w.id] ?? []).slice(0, 3).map((e, i) => (
+                <div key={i} style={{ fontSize: "0.88rem", marginTop: 8, overflowWrap: "anywhere" }}>
+                  {e.sentence}
+                  {e.translation && (
+                    <div className="muted" style={{ fontSize: "0.8rem" }}>
+                      {e.translation}
+                    </div>
+                  )}
+                </div>
+              ))}
               {!isPattern && (w as Word).mnemonic && (
                 <div className="muted" style={{ fontSize: "0.82rem", marginTop: 4 }}>
                   💡 {(w as Word).mnemonic}
@@ -160,7 +172,7 @@ export default function ReviewSwipe({
             </div>
           ) : (
             <div className="muted" style={{ fontSize: "0.82rem" }}>
-              탭하면 뜻 보기 Tippen für Bedeutung
+              탭하면 뜻·예문 보기 Tippen für Bedeutung
             </div>
           )}
         </div>
