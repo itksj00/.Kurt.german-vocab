@@ -311,8 +311,7 @@ export default function QuizRunner({ lockedScope, onStageChange, mode = "word" }
     if (stage !== "result" || finalizedRef.current) return;
     finalizedRef.current = true;
     // 복습 단어 퀴즈(1·2단계)를 마쳤으니, 다음 복습은 다시 3단계부터
-    // 복습할 항목을 모두 마쳤을 때만 다시 잠근다. 남은 게 있으면 이어서 다음 회차를 3단계 없이 할 수 있다.
-    if (scope === "due" && !isPattern && ownDue - answered.length <= 0) setSentenceGate(false);
+    // 3단계는 하루에 한 번만 하면 되므로, 복습을 마쳐도 다시 잠그지 않는다. (날짜가 바뀌면 자동으로 다시 필요)
     if (scope === "due") markReviewDone(isPattern ? "patterns" : "words");
 
     async function finalize() {
@@ -336,7 +335,7 @@ export default function QuizRunner({ lockedScope, onStageChange, mode = "word" }
       );
     }
     finalize();
-  }, [stage, answered, table, scope, isPattern, ownDue]);
+  }, [stage, answered, table, scope, isPattern]);
 
   if (loading) {
     return (
@@ -437,7 +436,7 @@ export default function QuizRunner({ lockedScope, onStageChange, mode = "word" }
                 {needsSentences
                   ? "복습(1·2단계)을 하려면 먼저 3단계를 마쳐야 합니다. Erst eigene Sätze bilden."
                   : !isPattern
-                    ? "3단계를 마쳤어요. 복습할 항목을 모두 마칠 때까지는 3단계 없이 이어서 할 수 있고, 다음 날부터는 다시 3단계부터 시작합니다."
+                    ? "오늘 3단계를 마쳤어요. 오늘은 3단계 없이 복습을 이어서 할 수 있고, 내일 처음 복습할 때 다시 3단계를 합니다."
                     : "1단계와 2단계 중 하나만 끝내도 복습을 마친 것으로 처리됩니다."}
               </p>
             </>

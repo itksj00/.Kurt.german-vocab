@@ -1,5 +1,5 @@
 // "복습 3단계(내 문장 만들기)를 먼저 마쳤는지" 표시를 저장소(localStorage)에 읽고 쓰는 로직.
-// 3단계를 마치면 그날 열리고(1·2단계 복습 가능), 복습할 항목을 모두 마치면 다시 잠긴다. 날짜가 바뀌면 다시 3단계부터.
+// 3단계는 하루에 한 번, 그날 첫 복습 전에만 하면 된다. 마치면 그날은 계속 열려 있고, 날짜가 바뀌면 다시 3단계부터.
 import { localDay } from "./reviewGate";
 
 export const SENTENCE_GATE_KEY = "wortschatz-sentence-gate";

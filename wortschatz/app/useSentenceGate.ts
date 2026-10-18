@@ -24,7 +24,7 @@ function snapshot(): boolean {
   }
 }
 
-// 3단계(내 문장 만들기)를 마쳤는지. true면 1·2단계 복습을 시작할 수 있다.
+// 오늘 3단계(내 문장 만들기)를 마쳤는지. true면 오늘은 1·2단계 복습을 계속할 수 있다.
 export function useSentenceGate(): boolean {
   return useSyncExternalStore(subscribe, snapshot, () => false);
 }
