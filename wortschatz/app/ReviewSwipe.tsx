@@ -116,6 +116,9 @@ export default function ReviewSwipe({
       : `color-mix(in srgb, var(--danger) ${Math.round(-lean * 40)}%, var(--panel))`;
   const isPattern = "verb" in w;
   const pos = isPattern ? null : (w as Word).part_of_speech;
+  // 카드 뒷면: 메모(패턴) 또는 암기 팁(단어), 예문
+  const note = isPattern ? (w as Pattern).note : (w as Word).mnemonic;
+  const exs = (examples[w.id] ?? []).slice(0, 3);
 
   return (
     <div className="card">
@@ -125,7 +128,8 @@ export default function ReviewSwipe({
         {state.round > 1 && ` · ${state.round}번째 라운드: 몰라요로 넘긴 카드를 다시 보여 줍니다`}
       </p>
 
-      <div className="sort-stage">
+      {/* 예문·메모가 들어가도 잘리지 않도록 높이를 내용에 맞추고 카드를 넓게 쓴다 */}
+      <div className="sort-stage" style={{ height: "auto", minHeight: 260, overflowX: "hidden", overflowY: "visible", padding: "8px 0" }}>
         <div
           className="sort-card"
           onPointerDown={onPointerDown}
@@ -133,6 +137,10 @@ export default function ReviewSwipe({
           onPointerUp={onPointerUp}
           onPointerCancel={onPointerUp}
           style={{
+            maxWidth: 720,
+            height: "auto",
+            minHeight: 220,
+            padding: "28px 20px",
             transform: `translateX(${x}px) rotate(${x / 30}deg)`,
             transition: dragging ? "none" : "transform 0.17s ease-out",
             background: tint,
@@ -152,21 +160,28 @@ export default function ReviewSwipe({
             {isPattern ? patternText(w as Pattern) : withArticle(w as Word)}
           </div>
           {flipped ? (
-            <div style={{ fontSize: "1.05rem" }}>
+            <div style={{ fontSize: "1.05rem", width: "100%" }}>
               {w.meaning}
-              {(examples[w.id] ?? []).slice(0, 3).map((e, i) => (
-                <div key={i} style={{ fontSize: "0.88rem", marginTop: 8, overflowWrap: "anywhere" }}>
-                  {e.sentence}
-                  {e.translation && (
-                    <div className="muted" style={{ fontSize: "0.8rem" }}>
-                      {e.translation}
-                    </div>
-                  )}
+              {note && (
+                <div className="muted" style={{ fontSize: "0.85rem", marginTop: 6, overflowWrap: "anywhere" }}>
+                  {isPattern ? "📝" : "💡"} {note}
                 </div>
-              ))}
-              {!isPattern && (w as Word).mnemonic && (
-                <div className="muted" style={{ fontSize: "0.82rem", marginTop: 4 }}>
-                  💡 {(w as Word).mnemonic}
+              )}
+              {exs.length > 0 && (
+                <div style={{ marginTop: 12, textAlign: "left", maxWidth: 560, marginInline: "auto" }}>
+                  <div className="muted" style={{ fontSize: "0.78rem" }}>
+                    예문 Beispiele
+                  </div>
+                  {exs.map((e, i) => (
+                    <div key={i} style={{ fontSize: "0.92rem", marginTop: 6, overflowWrap: "anywhere" }}>
+                      {e.sentence}
+                      {e.translation && (
+                        <div className="muted" style={{ fontSize: "0.82rem" }}>
+                          {e.translation}
+                        </div>
+                      )}
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
