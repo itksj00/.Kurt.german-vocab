@@ -33,3 +33,9 @@ export function nextSchedule(
     next_review_at: new Date(now + days * DAY_MS).toISOString(),
   };
 }
+
+// 카드에 표시할 암기 주기 정보: 현재 단계(1부터)와 그 단계의 복습 간격(일)
+export function stageInfo(stage: number): { n: number; total: number; days: number } {
+  const i = Math.max(0, Math.min(Math.trunc(stage) || 0, MAX_STAGE));
+  return { n: i + 1, total: REVIEW_INTERVALS_DAYS.length, days: REVIEW_INTERVALS_DAYS[i] };
+}

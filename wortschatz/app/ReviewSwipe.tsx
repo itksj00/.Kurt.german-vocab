@@ -7,6 +7,7 @@ import { patternText } from "@/lib/patterns";
 import { SWIPE_THRESHOLD, swipeDecision, type SortResult } from "@/lib/sort";
 import { currentId, initSwipe, isFinished, swipeCard, type SwipeState } from "@/lib/reviewSwipe";
 import { shuffle, type ExampleMap } from "@/lib/quizGen";
+import { stageInfo } from "@/lib/srs";
 
 type Item = Word | Pattern;
 
@@ -115,6 +116,7 @@ export default function ReviewSwipe({
       ? `color-mix(in srgb, var(--accent) ${Math.round(lean * 40)}%, var(--panel))`
       : `color-mix(in srgb, var(--danger) ${Math.round(-lean * 40)}%, var(--panel))`;
   const isPattern = "verb" in w;
+  const info = stageInfo(w.review_stage);
   const pos = isPattern ? null : (w as Word).part_of_speech;
   // 카드 뒷면: 메모(패턴) 또는 암기 팁(단어), 예문
   const note = isPattern ? (w as Pattern).note : (w as Word).mnemonic;
@@ -152,6 +154,24 @@ export default function ReviewSwipe({
           </span>
           <span className="sort-badge right" style={{ opacity: lean > 0 ? lean : 0 }}>
             알아요 Weiß ich
+          </span>
+          {/* 암기 주기: 지금 몇 단계(몇 일 간격)인지. 넘기는 중에는 알아요/몰라요 표시와 겹치지 않게 숨긴다 */}
+          <span
+            title="암기 주기 Wiederholungsintervall"
+            style={{
+              position: "absolute",
+              top: 10,
+              right: 12,
+              fontSize: "0.72rem",
+              padding: "2px 8px",
+              borderRadius: 999,
+              border: "1px solid var(--line)",
+              color: "var(--accent)",
+              background: "var(--panel)",
+              opacity: Math.abs(lean) > 0.15 ? 0 : 1,
+            }}
+          >
+            {info.n}/{info.total}단계 · {info.days}일
           </span>
           <div className="muted" style={{ fontSize: "0.8rem" }}>
             {isPattern ? "패턴 Muster" : pos ? posLabel(pos) : ""}
