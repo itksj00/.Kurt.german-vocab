@@ -41,7 +41,7 @@ type Item = Word | Pattern;
 type Answered = { word: Item; wrong: boolean };
 
 const WORD_COLS: string =
-  "id, word, meaning, part_of_speech, pronunciation, difficulty, gender, plural, perfekt_aux, partizip2, wrong_count, review_stage, next_review_at, last_studied_at, created_at, sorted_at, sort_result";
+  "id, word, meaning, part_of_speech, pronunciation, difficulty, gender, plural, perfekt_aux, partizip2, wrong_count, review_stage, next_review_at, last_studied_at, created_at, sorted_at, sort_result, mnemonic";
 function itemLabel(i: Item): string {
   return "verb" in i ? patternText(i) : withArticle(i);
 }
