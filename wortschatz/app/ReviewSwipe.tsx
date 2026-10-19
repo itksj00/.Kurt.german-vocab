@@ -7,7 +7,7 @@ import { patternText } from "@/lib/patterns";
 import { SWIPE_THRESHOLD, swipeDecision, type SortResult } from "@/lib/sort";
 import { currentId, initSwipe, isFinished, swipeCard, type SwipeState } from "@/lib/reviewSwipe";
 import { shuffle, type ExampleMap } from "@/lib/quizGen";
-import { stageInfo } from "@/lib/srs";
+import { REVIEW_INTERVALS_DAYS, overdueDays, stageInfo } from "@/lib/srs";
 
 type Item = Word | Pattern;
 
@@ -16,10 +16,12 @@ type Item = Word | Pattern;
 export default function ReviewSwipe({
   items,
   examples,
+  now,
   onFinish,
 }: {
   items: Item[];
   examples: ExampleMap;
+  now: number; // 지금 시각(ms) — 예정일보다 얼마나 밀렸는지 표시용
   onFinish: (results: { word: Item; wrong: boolean }[]) => void;
 }) {
   const [state, setState] = useState<SwipeState>(() => initSwipe(items.map((x) => x.id)));
@@ -117,6 +119,7 @@ export default function ReviewSwipe({
       : `color-mix(in srgb, var(--danger) ${Math.round(-lean * 40)}%, var(--panel))`;
   const isPattern = "verb" in w;
   const info = stageInfo(w.review_stage);
+  const late = overdueDays(w.next_review_at, now);
   const pos = isPattern ? null : (w as Word).part_of_speech;
   // 카드 뒷면: 메모(패턴) 또는 암기 팁(단어), 예문
   const note = isPattern ? (w as Pattern).note : (w as Word).mnemonic;
@@ -155,24 +158,52 @@ export default function ReviewSwipe({
           <span className="sort-badge right" style={{ opacity: lean > 0 ? lean : 0 }}>
             알아요 Weiß ich
           </span>
-          {/* 암기 주기: 지금 몇 단계(몇 일 간격)인지. 넘기는 중에는 알아요/몰라요 표시와 겹치지 않게 숨긴다 */}
+          {/* 망각곡선 복습 주기(일): 1·2·4·7·15·30 중 지금 어느 단계인지. 넘기는 중에는 알아요/몰라요 표시와 겹치지 않게 숨긴다 */}
           <span
-            title="암기 주기 Wiederholungsintervall"
+            data-testid="cycle"
+            title={`망각곡선 복습 주기 ${REVIEW_INTERVALS_DAYS.join("·")}일 중 ${info.days}일 단계 (${info.n}/${info.total})`}
             style={{
               position: "absolute",
-              top: 10,
-              right: 12,
+              top: 8,
+              right: 10,
+              display: "flex",
+              alignItems: "center",
+              gap: 3,
               fontSize: "0.72rem",
-              padding: "2px 8px",
-              borderRadius: 999,
-              border: "1px solid var(--line)",
-              color: "var(--accent)",
-              background: "var(--panel)",
               opacity: Math.abs(lean) > 0.15 ? 0 : 1,
             }}
           >
-            {info.n}/{info.total}단계 · {info.days}일
+            <span className="muted">주기</span>
+            {REVIEW_INTERVALS_DAYS.map((d, i) => {
+              const cur = i === info.n - 1;
+              return (
+                <span
+                  key={i}
+                  data-current={cur ? "true" : undefined}
+                  style={{
+                    padding: "1px 6px",
+                    borderRadius: 999,
+                    border: cur ? "1.5px solid var(--accent)" : "1.5px solid transparent",
+                    color: cur ? "var(--accent)" : undefined,
+                    fontWeight: cur ? 700 : 400,
+                    opacity: i < info.n - 1 ? 0.45 : cur ? 1 : 0.75,
+                    background: cur ? "var(--panel)" : undefined,
+                  }}
+                >
+                  {d}
+                </span>
+              );
+            })}
+            <span className="muted">일</span>
           </span>
+          {late > 0 && (
+            <span
+              data-testid="late"
+              style={{ position: "absolute", top: 34, right: 12, fontSize: "0.7rem", color: "var(--danger)", opacity: Math.abs(lean) > 0.15 ? 0 : 1 }}
+            >
+              예정보다 {late}일 밀림
+            </span>
+          )}
           <div className="muted" style={{ fontSize: "0.8rem" }}>
             {isPattern ? "패턴 Muster" : pos ? posLabel(pos) : ""}
           </div>

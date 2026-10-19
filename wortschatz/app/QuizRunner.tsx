@@ -69,6 +69,7 @@ export default function QuizRunner({ lockedScope, onStageChange, mode = "word" }
   const [makeMode, setMakeMode] = useState(false); // 지금 3단계(내 문장 만들기) 진행 중인지
   const [makeWords, setMakeWords] = useState<Word[]>([]); // 3단계에서 문장을 만들 무작위 단어 5개
   const sentenceOpen = useSentenceGate(); // 3단계를 마쳐서 1·2단계 복습이 열려 있는지
+  const [swipeNow, setSwipeNow] = useState(0); // 1단계 시작 시각(ms) — 카드에 "N일 밀림" 표시용
   const [swipeMode, setSwipeMode] = useState(false); // 지금 진행 중인(또는 방금 끝난) 퀴즈가 1단계 카드 복습인지
   const [otherDue, setOtherDue] = useState(0); // 다른 쪽(단어↔패턴)의 복습 대상 개수
 
@@ -215,6 +216,7 @@ export default function QuizRunner({ lockedScope, onStageChange, mode = "word" }
     if (scope === "due" && lv === 1) {
       // 1단계: 문제를 만들지 않고 카드 스와이프로 진행한다 (끝나면 결과를 받아 복습 일정에 반영)
       setSwipeMode(true);
+      setSwipeNow(Date.now());
       changeStage("playing");
       return;
     }
@@ -501,7 +503,7 @@ export default function QuizRunner({ lockedScope, onStageChange, mode = "word" }
   if (stage === "playing" && swipeMode) {
     return (
       <div>
-        <ReviewSwipe items={queue} examples={examplesByWord} onFinish={finishSwipe} />
+        <ReviewSwipe items={queue} examples={examplesByWord} now={swipeNow} onFinish={finishSwipe} />
       </div>
     );
   }

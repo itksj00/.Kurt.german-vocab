@@ -39,3 +39,10 @@ export function stageInfo(stage: number): { n: number; total: number; days: numb
   const i = Math.max(0, Math.min(Math.trunc(stage) || 0, MAX_STAGE));
   return { n: i + 1, total: REVIEW_INTERVALS_DAYS.length, days: REVIEW_INTERVALS_DAYS[i] };
 }
+
+// 복습 예정일보다 며칠 늦었는지 (일정이 없거나 아직 예정 전이면 0)
+export function overdueDays(nextReviewAt: string | null, now: number): number {
+  if (!nextReviewAt) return 0;
+  const ms = now - new Date(nextReviewAt).getTime();
+  return ms > 0 ? Math.floor(ms / DAY_MS) : 0;
+}
