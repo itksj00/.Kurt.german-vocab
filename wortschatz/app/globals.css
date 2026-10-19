@@ -184,6 +184,11 @@ main.site-main.narrow {
   max-width: 640px;
 }
 
+/* 퀴즈 화면(퀴즈·복습·독독독): 긴 문장이 줄바꿈되지 않도록 더 넓게 */
+main.site-main.wide-quiz {
+  max-width: 920px;
+}
+
 @media (max-width: 640px) {
   header.site-header {
     padding: 12px 16px;

@@ -54,7 +54,7 @@ export default function MemoPage() {
   ];
 
   return (
-    <main className="site-main narrow">
+    <main className="site-main wide-quiz">
       <div className="page-hero">
         <div>
           <h1>

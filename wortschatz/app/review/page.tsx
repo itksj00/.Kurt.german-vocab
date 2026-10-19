@@ -118,7 +118,7 @@ export default function ReviewPage() {
   const showLists = stage === "setup";
 
   return (
-    <main className="site-main narrow">
+    <main className="site-main wide-quiz">
       {showLists && <ModeTabs mode={mode} onChange={changeMode} />}
 
       {showLists && (
