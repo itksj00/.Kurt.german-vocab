@@ -9,6 +9,13 @@ export function isDue(nextReviewAt: string | null, now = Date.now()): boolean {
   return !nextReviewAt || new Date(nextReviewAt).getTime() <= now;
 }
 
+// 현지 시간 기준 days일 뒤 0시. 복습 시각이 아니라 날짜로 주기를 센다.
+// (예: 월요일 22시에 풀고 1일 단계면 화요일 0시부터 복습 대상)
+export function startOfDayAfter(days: number, now = Date.now()): string {
+  const d = new Date(now);
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate() + days).toISOString();
+}
+
 export type SrsUpdate = { review_stage: number; next_review_at: string };
 
 // 복습 예정일보다 이 배수 이상 늦게 풀었으면(예: 1일 단계인데 3일 넘게 지남) 맞혀도 단계를 올리지 않는다.
@@ -30,7 +37,7 @@ export function nextSchedule(
   const days = REVIEW_INTERVALS_DAYS[stage];
   return {
     review_stage: stage,
-    next_review_at: new Date(now + days * DAY_MS).toISOString(),
+    next_review_at: startOfDayAfter(days, now),
   };
 }
 

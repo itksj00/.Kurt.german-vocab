@@ -3,7 +3,6 @@
 export type SortResult = "known" | "unknown";
 
 export const SWIPE_THRESHOLD = 90; // px. 이 이상 밀면 분류 확정
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 // 오른쪽 = 알아요, 왼쪽 = 몰라요, 그 사이 = 아직 확정 아님
 export function swipeDecision(dx: number, threshold = SWIPE_THRESHOLD): SortResult | null {
@@ -35,7 +34,7 @@ export function undoPatch(now = Date.now()) {
     sorted_at: null,
     sort_result: null,
     review_stage: 0,
-    next_review_at: new Date(now + DAY_MS).toISOString(),
+    next_review_at: startOfTomorrow(now),
   };
 }
 
