@@ -66,7 +66,7 @@ export default function ReviewSwipe({
     setDragX(0);
   }
 
-  // 키보드: ← 몰라요, → 알아요, Space 뒤집기, Z 되돌리기. 최신 핸들러를 ref로 참조한다.
+  // 키보드: ← 몰라요, → 알아요, ↑/↓ 뒤집기, Z 되돌리기. 최신 핸들러를 ref로 참조한다.
   const handlersRef = useRef({ commit, undo, flip: () => setFlipped((f) => !f) });
   useEffect(() => {
     handlersRef.current = { commit, undo, flip: () => setFlipped((f) => !f) };
@@ -83,7 +83,7 @@ export default function ReviewSwipe({
         targetTag: (e.target as HTMLElement | null)?.tagName,
       });
       if (!action) return;
-      if (e.key === " " || e.key === "Spacebar") e.preventDefault(); // 페이지 스크롤/버튼 클릭 방지
+      if (e.key === "ArrowUp" || e.key === "ArrowDown") e.preventDefault(); // 페이지 스크롤 방지
       if (action === "known" || action === "unknown") handlersRef.current.commit(action);
       else if (action === "undo") handlersRef.current.undo();
       else handlersRef.current.flip();
@@ -264,7 +264,7 @@ export default function ReviewSwipe({
         </button>
       </div>
       <p className="muted" style={{ marginTop: 8, fontSize: 12 }}>
-        키보드: ← 몰라요 · → 알아요 · Space 뒤집기 · Z 되돌리기
+        키보드: ← 몰라요 · → 알아요 · ↑/↓ 뒤집기 · Z 되돌리기
       </p>
       <div style={{ marginTop: 8 }}>
         <button className="btn ghost" onClick={undo} disabled={history.length === 0 || !!leaving}>

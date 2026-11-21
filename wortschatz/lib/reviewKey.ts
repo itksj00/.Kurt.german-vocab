@@ -1,4 +1,4 @@
-// 복습 카드 키보드 매핑: ← 몰라요, → 알아요, Space 앞/뒷면 뒤집기, Z 되돌리기.
+// 복습 카드 키보드 매핑: ← 몰라요, → 알아요, ↑/↓ 앞/뒷면 뒤집기, Z 되돌리기.
 
 export type ReviewKeyEventLike = {
   key: string;
@@ -20,7 +20,7 @@ export function reviewKeyAction(e: ReviewKeyEventLike): ReviewKeyAction {
   if (e.key === "ArrowRight") return "known";
   if (e.key === "ArrowLeft") return "unknown";
   if (e.key === "z" || e.key === "Z") return "undo";
-  // 스페이스는 키를 꾹 눌러도 한 번만 뒤집는다
-  if ((e.key === " " || e.key === "Spacebar") && !e.repeat) return "flip";
+  // 위/아래는 키를 꾹 눌러도 한 번만 뒤집는다
+  if ((e.key === "ArrowUp" || e.key === "ArrowDown") && !e.repeat) return "flip";
   return null;
 }
